@@ -36,14 +36,14 @@ export function OnboardingModal({ onCompleted }: OnboardingModalProps) {
     <div className="onboarding-overlay">
       <div className="onboarding-card">
         <div>
-          <h2 style={{ margin: 0 }}>Welcome to Cohesive</h2>
+          <h2>Welcome to Cohesive</h2>
           <p className="muted">
             Local-first workspace for Code, Writing, and Mind. Add your DeepSeek
             API key to enable AI features.
           </p>
         </div>
         <label>
-          <div className="muted" style={{ marginBottom: 8 }}>
+          <div className="muted onboarding-label">
             DeepSeek API Key
           </div>
           <input

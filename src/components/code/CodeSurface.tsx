@@ -79,8 +79,8 @@ export function CodeSidebar({ activeSessionId, onSelectSession }: CodeSurfacePro
       </div>
       <div className="sidebar-list">
         {projects.length > 0 ? (
-          <div style={{ padding: "0 8px 12px" }}>
-            <div className="muted" style={{ marginBottom: 8 }}>
+          <div className="sidebar-section">
+            <div className="muted sidebar-section-label">
               Projects
             </div>
             {projects.map((project) => (
@@ -244,13 +244,13 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
         </div>
       </div>
       <div className="panel-body">
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, padding: 16 }}>
-          <section>
-            <h3>Agent chat</h3>
-            <div className="chat-thread">
+        <div className="panel-grid">
+          <section className="panel-section">
+            <h3 className="section-title">Agent chat</h3>
+            <div className="chat-thread compact">
               {messages.map((message) => (
                 <div key={message.id} className={`chat-message ${message.role}`}>
-                  <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>
+                  <div className="muted chat-message-role">
                     {message.role}
                   </div>
                   <div>{message.content}</div>
@@ -269,9 +269,9 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
               </button>
             </div>
           </section>
-          <section>
-            <h3>Project tools</h3>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <section className="panel-section">
+            <h3 className="section-title">Project tools</h3>
+            <div className="stack">
               <input
                 className="text-input"
                 value={filePath}
@@ -284,7 +284,7 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
                 onChange={(event) => setFileContent(event.target.value)}
                 placeholder="File content"
               />
-              <div style={{ display: "flex", gap: 8 }}>
+              <div className="row">
                 <button className="secondary-button" onClick={() => void handleReadFile()}>
                   Read file
                 </button>
@@ -316,7 +316,7 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
                 </div>
               ) : null}
             </div>
-            <h3 style={{ marginTop: 24 }}>Tool runs</h3>
+            <h3 className="section-title section-title-spaced">Tool runs</h3>
             {toolRuns.map((toolRun) => (
               <div key={toolRun.id} className="tool-run">
                 <div>

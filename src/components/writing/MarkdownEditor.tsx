@@ -42,7 +42,7 @@ export function MarkdownEditor({ value, onChange, readOnly }: MarkdownEditorProp
             },
             ".cm-content": {
               caretColor: "var(--text-primary)",
-              padding: "16px 0",
+              padding: "8px 0",
             },
             ".cm-gutters": {
               backgroundColor: "var(--bg-secondary)",

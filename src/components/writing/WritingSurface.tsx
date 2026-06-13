@@ -152,8 +152,8 @@ export function WritingMainPanel({ activeDocumentId }: { activeDocumentId: strin
         ))}
       </div>
       {actionOutput ? (
-        <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border-subtle)" }}>
-          <div className="muted" style={{ marginBottom: 8 }}>
+        <div className="ai-suggestion-bar">
+          <div className="muted ai-suggestion-label">
             AI suggestion
           </div>
           <div>{actionOutput}</div>

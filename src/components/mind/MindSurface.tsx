@@ -161,7 +161,7 @@ export function MindMainPanel({ activeSessionId }: { activeSessionId: string | n
         <div className="chat-thread">
           {messages.map((message) => (
             <div key={message.id} className={`chat-message ${message.role}`}>
-              <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>
+              <div className="muted chat-message-role">
                 {message.role}
               </div>
               <div>{message.content}</div>
