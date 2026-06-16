@@ -9,3 +9,14 @@ export async function invoke<T>(
 export function isTauriRuntime(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
+
+export function isMacOSDesktop(): boolean {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+  return /Mac/i.test(navigator.userAgent);
+}
+
+export function isMacFrameless(): boolean {
+  return isTauriRuntime() && isMacOSDesktop();
+}

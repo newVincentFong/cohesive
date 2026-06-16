@@ -12,6 +12,7 @@
   --success: #98c379;
   --sidebar-width: 240px;
   --topbar-height: 40px;
+  --mac-traffic-light-inset: 78px;
   --space-xs: 4px;
   --space-sm: 6px;
   --space-md: 8px;
@@ -64,6 +65,34 @@ a {
   padding: 0 var(--space-xl);
   border-bottom: 1px solid var(--border-subtle);
   background: var(--bg-secondary);
+  flex-shrink: 0;
+}
+
+.mac-frameless .topbar {
+  padding-left: 0;
+  user-select: none;
+}
+
+.mac-frameless .topbar-traffic-spacer {
+  width: var(--mac-traffic-light-inset);
+  flex-shrink: 0;
+  align-self: stretch;
+}
+
+.topbar-leading,
+.topbar-trailing {
+  display: flex;
+  align-items: center;
+}
+
+.topbar-leading {
+  flex: 1;
+  min-width: 0;
+}
+
+.topbar-trailing {
+  flex: 1;
+  justify-content: flex-end;
 }
 
 .brand {
