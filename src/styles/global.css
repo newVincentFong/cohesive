@@ -138,6 +138,20 @@ a {
   min-height: 0;
 }
 
+.sidebar-domain-switch {
+  padding: var(--space-md);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.sidebar-domain-switch .domain-switch {
+  display: flex;
+  width: 100%;
+}
+
+.sidebar-domain-switch .domain-switch button {
+  flex: 1;
+}
+
 .sidebar-header {
   padding: var(--space-md);
   border-bottom: 1px solid var(--border-subtle);

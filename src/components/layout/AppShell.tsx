@@ -27,13 +27,17 @@ export function AppShell({
         <div className="topbar-leading" data-tauri-drag-region={macFrameless || undefined}>
           <div className="brand">Cohesive</div>
         </div>
-        <DomainSwitch activeDomain={activeDomain} onChange={onDomainChange} />
         <div className="topbar-trailing muted" data-tauri-drag-region={macFrameless || undefined}>
           Local first
         </div>
       </header>
       <div className="workspace">
-        <aside className="sidebar">{sidebar}</aside>
+        <aside className="sidebar">
+          <div className="sidebar-domain-switch">
+            <DomainSwitch activeDomain={activeDomain} onChange={onDomainChange} />
+          </div>
+          {sidebar}
+        </aside>
         <main className="main-panel">{children}</main>
       </div>
     </div>
