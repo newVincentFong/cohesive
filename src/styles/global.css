@@ -79,6 +79,11 @@ a {
   align-self: stretch;
 }
 
+.mac-frameless .topbar-leading,
+.mac-frameless .topbar-trailing {
+  align-self: stretch;
+}
+
 .topbar-leading,
 .topbar-trailing {
   display: flex;
