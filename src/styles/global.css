@@ -196,6 +196,112 @@ a {
   background: var(--bg-elevated);
 }
 
+.sidebar-item-row {
+  display: flex;
+  align-items: stretch;
+  border-radius: 6px;
+}
+
+.sidebar-item-row:hover,
+.sidebar-item-row.active {
+  background: var(--bg-elevated);
+}
+
+.sidebar-item-row .sidebar-item {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+}
+
+.sidebar-item-row:hover .sidebar-item,
+.sidebar-item-row.active .sidebar-item {
+  background: transparent;
+}
+
+.sidebar-item-actions {
+  position: relative;
+  flex-shrink: 0;
+  align-self: center;
+  margin-right: var(--space-xs);
+}
+
+.sidebar-item-menu-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 4px;
+  opacity: 0;
+}
+
+.sidebar-item-row:hover .sidebar-item-menu-trigger,
+.sidebar-item-row.active .sidebar-item-menu-trigger,
+.sidebar-item-menu-trigger[aria-expanded="true"] {
+  opacity: 1;
+}
+
+.sidebar-item-menu-trigger:hover,
+.sidebar-item-menu-trigger[aria-expanded="true"] {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+}
+
+.sidebar-item-menu-dots {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+
+.sidebar-item-menu-dots span {
+  display: block;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.sidebar-item-menu {
+  position: absolute;
+  top: calc(100% + 2px);
+  right: 0;
+  z-index: 10;
+  min-width: 120px;
+  padding: var(--space-xs);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.sidebar-item-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: 4px;
+}
+
+.sidebar-item-menu-item:hover {
+  background: var(--bg-elevated);
+}
+
+.sidebar-item-menu-item.danger {
+  color: var(--danger);
+}
+
+.sidebar-item-menu-item.danger:hover {
+  background: rgba(224, 108, 117, 0.12);
+}
+
 .main-panel {
   flex: 1;
   min-width: 0;

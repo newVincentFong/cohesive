@@ -11,6 +11,7 @@ import {
 } from "@/core/session/session.service";
 import { getDomainMemoryStore } from "@/core/memory/memory-registry";
 import { createLlmProvider } from "@/core/llm/deepseek-provider";
+import { SessionSidebarList } from "@/components/session/SessionSidebarList";
 
 interface MindSurfaceProps {
   activeSessionId: string | null;
@@ -45,18 +46,13 @@ export function MindSidebar({ activeSessionId, onSelectSession }: MindSurfacePro
         </button>
       </div>
       <div className="sidebar-list">
-        {sessions.map((session) => (
-          <button
-            key={session.id}
-            className={`sidebar-item ${activeSessionId === session.id ? "active" : ""}`}
-            onClick={() => onSelectSession(session.id)}
-          >
-            <div>{session.title}</div>
-            <div className="muted" style={{ fontSize: 12 }}>
-              {new Date(session.updatedAt).toLocaleString()}
-            </div>
-          </button>
-        ))}
+        <SessionSidebarList
+          sessions={sessions}
+          activeSessionId={activeSessionId}
+          onSelectSession={onSelectSession}
+          onSessionsChange={() => void refresh()}
+          renderSubtitle={(session) => new Date(session.updatedAt).toLocaleString()}
+        />
       </div>
     </>
   );

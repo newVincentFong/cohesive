@@ -23,6 +23,7 @@ import type { Message } from "@/core/message/message.types";
 import type { Session } from "@/core/session/session.types";
 import { deriveSessionTitle } from "@/core/session/session.types";
 import { open } from "@tauri-apps/plugin-dialog";
+import { SessionSidebarList } from "@/components/session/SessionSidebarList";
 
 interface CodeSurfaceProps {
   activeSessionId: string | null;
@@ -97,18 +98,13 @@ export function CodeSidebar({ activeSessionId, onSelectSession }: CodeSurfacePro
             ))}
           </div>
         ) : null}
-        {sessions.map((session) => (
-          <button
-            key={session.id}
-            className={`sidebar-item ${activeSessionId === session.id ? "active" : ""}`}
-            onClick={() => onSelectSession(session.id)}
-          >
-            <div>{session.title}</div>
-            <div className="muted" style={{ fontSize: 12 }}>
-              {session.mode ?? "plan"}
-            </div>
-          </button>
-        ))}
+        <SessionSidebarList
+          sessions={sessions}
+          activeSessionId={activeSessionId}
+          onSelectSession={onSelectSession}
+          onSessionsChange={() => void refresh()}
+          renderSubtitle={(session) => session.mode ?? "plan"}
+        />
       </div>
     </>
   );
