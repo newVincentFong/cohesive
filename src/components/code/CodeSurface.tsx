@@ -23,7 +23,30 @@ import type { Message } from "@/core/message/message.types";
 import type { Session } from "@/core/session/session.types";
 import { deriveSessionTitle } from "@/core/session/session.types";
 import { open } from "@tauri-apps/plugin-dialog";
+import type { AgentProgress } from "@/core/code/agents/agent.types";
+import { runExploreAgent } from "@/core/code/agents/explore-main-agent";
 import { SessionSidebarList } from "@/components/session/SessionSidebarList";
+
+function ToolMessageBody({ message }: { message: Message }) {
+  const [expanded, setExpanded] = useState(false);
+  const isLong = message.content.length > 600;
+
+  return (
+    <div className="tool-message-body">
+      {message.toolName ? (
+        <span className="tool-message-badge">{message.toolName}</span>
+      ) : null}
+      <div className="tool-message-content">
+        {isLong && !expanded ? `${message.content.slice(0, 600)}…` : message.content}
+      </div>
+      {isLong ? (
+        <button className="secondary-button tool-message-toggle" onClick={() => setExpanded(!expanded)}>
+          {expanded ? "Show less" : "Show more"}
+        </button>
+      ) : null}
+    </div>
+  );
+}
 
 interface CodeSurfaceProps {
   activeSessionId: string | null;
@@ -119,6 +142,9 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
   const [fileContent, setFileContent] = useState("");
   const [shellCommand, setShellCommand] = useState("ls");
   const [pendingConfirmation, setPendingConfirmation] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [agentPhase, setAgentPhase] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   async function refreshSessionData(nextSession: Session) {
     setMessages(await listMessages(nextSession.id));
@@ -150,21 +176,93 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
     setSession(updated);
   }
 
-  async function handleSendMessage() {
-    if (!session || !draft.trim()) return;
-    const isFirstMessage = messages.length === 0;
+  async function persistToolTrace(update: AgentProgress) {
+    if (!session || !update.toolTrace) return;
     await createMessage({
       sessionId: session.id,
-      role: "user",
-      content: draft.trim(),
+      role: "tool",
+      content: update.toolTrace.content,
+      toolName: update.toolTrace.toolName,
+      toolPayload: update.toolTrace.toolPayload,
     });
-    if (isFirstMessage) {
-      await updateSession(session.id, {
-        title: deriveSessionTitle(draft.trim()),
+    setMessages(await listMessages(session.id));
+  }
+
+  async function handleSendMessage() {
+    if (!session || !draft.trim() || busy) return;
+
+    const content = draft.trim();
+    const isFirstMessage = messages.length === 0;
+    const isExploreMode = (session.mode ?? "plan") === "explore";
+
+    setBusy(true);
+    setError(null);
+    setAgentPhase(null);
+
+    try {
+      await createMessage({
+        sessionId: session.id,
+        role: "user",
+        content,
       });
+
+      if (isFirstMessage) {
+        const updated = await updateSession(session.id, {
+          title: deriveSessionTitle(content),
+        });
+        setSession(updated);
+      }
+
+      setDraft("");
+      const history = await listMessages(session.id);
+      setMessages(history);
+
+      if (!isExploreMode) {
+        return;
+      }
+
+      if (!session.projectId) {
+        throw new Error("This session has no project attached.");
+      }
+
+      const project = (await listCodeProjects()).find((item) => item.id === session.projectId);
+      if (!project) {
+        throw new Error("Project not found for this session.");
+      }
+
+      setAgentPhase("Exploring...");
+      const priorHistory = history.slice(0, -1);
+
+      const answer = await runExploreAgent({
+        session,
+        project,
+        userMessage: content,
+        history: priorHistory,
+        onProgress: async (update) => {
+          if (update.phase === "reading") {
+            setAgentPhase("Reading files...");
+          } else if (update.phase === "delegating") {
+            setAgentPhase("Delegating exploration...");
+          } else {
+            setAgentPhase("Thinking...");
+          }
+          await persistToolTrace(update);
+        },
+      });
+
+      await createMessage({
+        sessionId: session.id,
+        role: "assistant",
+        content: answer,
+      });
+
+      await refreshSessionData(session);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to run explore agent");
+    } finally {
+      setBusy(false);
+      setAgentPhase(null);
     }
-    setDraft("");
-    await refreshSessionData(session);
   }
 
   async function handleReadFile() {
@@ -248,20 +346,37 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
                 <div key={message.id} className={`chat-message ${message.role}`}>
                   <div className="muted chat-message-role">
                     {message.role}
+                    {message.toolName ? ` · ${message.toolName}` : ""}
                   </div>
-                  <div>{message.content}</div>
+                  {message.role === "tool" ? (
+                    <ToolMessageBody message={message} />
+                  ) : (
+                    <div>{message.content}</div>
+                  )}
                 </div>
               ))}
             </div>
             <div className="chat-composer">
+              {error ? (
+                <div className="settings-message settings-message--error">{error}</div>
+              ) : null}
               <textarea
                 className="textarea-input"
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
-                placeholder="Ask the coding agent..."
+                placeholder={
+                  (session.mode ?? "plan") === "explore"
+                    ? "Ask the coding agent to explore this codebase..."
+                    : "Switch to explore mode for agent chat"
+                }
+                disabled={busy}
               />
-              <button className="primary-button" onClick={() => void handleSendMessage()}>
-                Send
+              <button
+                className="primary-button"
+                disabled={busy}
+                onClick={() => void handleSendMessage()}
+              >
+                {busy ? (agentPhase ?? "Working...") : "Send"}
               </button>
             </div>
           </section>

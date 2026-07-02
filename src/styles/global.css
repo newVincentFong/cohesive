@@ -444,9 +444,39 @@ a {
   background: var(--accent-soft);
 }
 
+.chat-message.tool {
+  background: var(--bg-primary);
+  border-style: dashed;
+}
+
 .chat-message-role {
   font-size: 11px;
   margin-bottom: var(--space-xs);
+}
+
+.tool-message-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  margin-bottom: var(--space-xs);
+}
+
+.tool-message-content {
+  white-space: pre-wrap;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+}
+
+.tool-message-toggle {
+  margin-top: var(--space-sm);
+  font-size: 11px;
+  padding: 4px 8px;
 }
 
 .chat-composer {

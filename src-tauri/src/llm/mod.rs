@@ -1,11 +1,77 @@
 use crate::models::{
-    LlmCompletionInput, LlmCompletionResult, LlmStreamChunk, LlmUsage, SelectionActionRequest,
-    SelectionActionResult,
+    LlmCompletionInput, LlmCompletionResult, LlmMessage, LlmStreamChunk, LlmToolCall,
+    LlmToolDefinition, LlmUsage, SelectionActionRequest, SelectionActionResult,
 };
 use crate::settings;
 
 const DEFAULT_MODEL: &str = "deepseek-v4-pro";
 const DEEPSEEK_URL: &str = "https://api.deepseek.com/chat/completions";
+
+/// DeepSeek uses the OpenAI chat format (snake_case fields like `tool_call_id`).
+fn messages_to_api_json(messages: &[LlmMessage]) -> Vec<serde_json::Value> {
+    messages.iter().map(message_to_api_json).collect()
+}
+
+fn message_to_api_json(message: &LlmMessage) -> serde_json::Value {
+    let mut obj = serde_json::Map::new();
+    obj.insert("role".to_string(), serde_json::json!(message.role));
+
+    match &message.content {
+        Some(content) => {
+            obj.insert("content".to_string(), serde_json::json!(content));
+        }
+        None if message.tool_calls.is_some() => {
+            obj.insert("content".to_string(), serde_json::Value::Null);
+        }
+        None => {}
+    }
+
+    if let Some(tool_calls) = &message.tool_calls {
+        obj.insert(
+            "tool_calls".to_string(),
+            serde_json::json!(tool_calls
+                .iter()
+                .map(tool_call_to_api_json)
+                .collect::<Vec<_>>()),
+        );
+    }
+
+    if let Some(tool_call_id) = &message.tool_call_id {
+        obj.insert(
+            "tool_call_id".to_string(),
+            serde_json::json!(tool_call_id),
+        );
+    }
+
+    serde_json::Value::Object(obj)
+}
+
+fn tool_call_to_api_json(tool_call: &LlmToolCall) -> serde_json::Value {
+    serde_json::json!({
+        "id": tool_call.id,
+        "type": tool_call.call_type,
+        "function": {
+            "name": tool_call.function.name,
+            "arguments": tool_call.function.arguments,
+        }
+    })
+}
+
+fn tools_to_api_json(tools: &[LlmToolDefinition]) -> Vec<serde_json::Value> {
+    tools
+        .iter()
+        .map(|tool| {
+            serde_json::json!({
+                "type": tool.tool_type,
+                "function": {
+                    "name": tool.function.name,
+                    "description": tool.function.description,
+                    "parameters": tool.function.parameters,
+                }
+            })
+        })
+        .collect()
+}
 
 #[derive(serde::Deserialize)]
 struct DeepSeekResponse {
@@ -17,11 +83,13 @@ struct DeepSeekResponse {
 #[derive(serde::Deserialize)]
 struct DeepSeekChoice {
     message: DeepSeekMessage,
+    finish_reason: Option<String>,
 }
 
 #[derive(serde::Deserialize)]
 struct DeepSeekMessage {
-    content: String,
+    content: Option<String>,
+    tool_calls: Option<Vec<LlmToolCall>>,
 }
 
 #[derive(serde::Deserialize)]
@@ -33,18 +101,25 @@ struct DeepSeekUsage {
 
 #[tauri::command]
 pub async fn llm_complete(input: LlmCompletionInput) -> Result<LlmCompletionResult, String> {
-    let api_key = settings::get_api_key()?.ok_or_else(|| "DeepSeek API key is not configured".to_string())?;
+    let api_key =
+        settings::get_api_key()?.ok_or_else(|| "DeepSeek API key is not configured".to_string())?;
     let model = input.model.unwrap_or_else(|| DEFAULT_MODEL.to_string());
 
     let client = reqwest::Client::new();
     let mut body = serde_json::json!({
         "model": model,
-        "messages": input.messages,
+        "messages": messages_to_api_json(&input.messages),
         "temperature": input.temperature.unwrap_or(0.7),
         "stream": false
     });
     if let Some(max_tokens) = input.max_tokens {
         body["max_tokens"] = serde_json::json!(max_tokens);
+    }
+    if let Some(tools) = input.tools {
+        body["tools"] = serde_json::json!(tools_to_api_json(&tools));
+    }
+    if let Some(tool_choice) = input.tool_choice {
+        body["tool_choice"] = tool_choice;
     }
 
     let response = client
@@ -67,11 +142,13 @@ pub async fn llm_complete(input: LlmCompletionInput) -> Result<LlmCompletionResu
     }
 
     let payload: DeepSeekResponse = response.json().await.map_err(|err| err.to_string())?;
-    let content = payload
-        .choices
-        .first()
-        .map(|choice| choice.message.content.clone())
+    let choice = payload.choices.first();
+    let message = choice.map(|item| &item.message);
+    let content = message
+        .and_then(|item| item.content.clone())
         .unwrap_or_default();
+    let tool_calls = message.and_then(|item| item.tool_calls.clone());
+    let finish_reason = choice.and_then(|item| item.finish_reason.clone());
 
     Ok(LlmCompletionResult {
         content,
@@ -81,6 +158,8 @@ pub async fn llm_complete(input: LlmCompletionInput) -> Result<LlmCompletionResu
             completion_tokens: usage.completion_tokens,
             total_tokens: usage.total_tokens,
         }),
+        tool_calls,
+        finish_reason,
     })
 }
 
@@ -110,16 +189,25 @@ pub async fn writing_selection_action(
         messages: vec![
             crate::models::LlmMessage {
                 role: "system".to_string(),
-                content: "You are a precise writing assistant. Return only the transformed text.".to_string(),
+                content: Some(
+                    "You are a precise writing assistant. Return only the transformed text."
+                        .to_string(),
+                ),
+                tool_calls: None,
+                tool_call_id: None,
             },
             crate::models::LlmMessage {
                 role: "user".to_string(),
-                content: prompt,
+                content: Some(prompt),
+                tool_calls: None,
+                tool_call_id: None,
             },
         ],
         model: Some(DEFAULT_MODEL.to_string()),
         temperature: Some(0.4),
         max_tokens: Some(1200),
+        tools: None,
+        tool_choice: None,
     })
     .await?;
 
