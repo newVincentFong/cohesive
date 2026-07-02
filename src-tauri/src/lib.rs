@@ -21,6 +21,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             settings::settings_get,
             settings::settings_save_api_key,
+            settings::settings_clear_api_key,
             settings::settings_complete_onboarding,
             commands::session_create,
             commands::session_list,

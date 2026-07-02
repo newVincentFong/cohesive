@@ -5,6 +5,7 @@ import {
   getAppSettings,
   saveApiKey,
 } from "@/core/settings/settings.service";
+import { ApiKeyField } from "@/components/settings/ApiKeyField";
 
 interface OnboardingModalProps {
   onCompleted: () => void;
@@ -42,19 +43,11 @@ export function OnboardingModal({ onCompleted }: OnboardingModalProps) {
             API key to enable AI features.
           </p>
         </div>
-        <label>
-          <div className="muted onboarding-label">
-            DeepSeek API Key
-          </div>
-          <input
-            className="text-input"
-            type="password"
-            value={apiKey}
-            onChange={(event) => setApiKey(event.target.value)}
-            placeholder="sk-..."
-            disabled={skipKey}
-          />
-        </label>
+        <ApiKeyField
+          value={apiKey}
+          onChange={setApiKey}
+          disabled={skipKey}
+        />
         <label className="muted">
           <input
             type="checkbox"

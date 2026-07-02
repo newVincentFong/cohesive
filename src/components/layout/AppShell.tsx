@@ -8,6 +8,7 @@ import { DomainSwitch } from "./DomainSwitch";
 interface AppShellProps {
   activeDomain: Domain;
   onDomainChange: (domain: Domain) => void;
+  onOpenSettings: () => void;
   sidebar: ReactNode;
   children: ReactNode;
 }
@@ -15,6 +16,7 @@ interface AppShellProps {
 export function AppShell({
   activeDomain,
   onDomainChange,
+  onOpenSettings,
   sidebar,
   children,
 }: AppShellProps) {
@@ -53,7 +55,17 @@ export function AppShell({
         <div className="topbar-leading">
           <div className="brand">Cohesive</div>
         </div>
-        <div className="topbar-trailing muted">Local first</div>
+        <div className="topbar-trailing">
+          <button
+            type="button"
+            className="ghost-button"
+            data-tauri-drag-region="false"
+            onClick={onOpenSettings}
+          >
+            Settings
+          </button>
+          <span className="muted">Local first</span>
+        </div>
       </header>
       <div className="workspace">
         <aside className="sidebar">

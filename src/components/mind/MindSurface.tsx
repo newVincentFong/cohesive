@@ -63,6 +63,7 @@ export function MindMainPanel({ activeSessionId }: { activeSessionId: string | n
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!activeSessionId) {
@@ -84,18 +85,26 @@ export function MindMainPanel({ activeSessionId }: { activeSessionId: string | n
 
   async function handleSend() {
     if (!session || !draft.trim() || busy) return;
+
+    const content = draft.trim();
     setBusy(true);
+    setError(null);
     try {
       const isFirstMessage = messages.length === 0;
       await createMessage({
         sessionId: session.id,
         role: "user",
-        content: draft.trim(),
+        content,
       });
+
+      setDraft("");
+      setMessages(await listMessages(session.id));
+
       if (isFirstMessage) {
-        await updateSession(session.id, {
-          title: deriveSessionTitle(draft.trim()),
+        const updated = await updateSession(session.id, {
+          title: deriveSessionTitle(content),
         });
+        setSession(updated);
       }
 
       const memory = getDomainMemoryStore("mind");
@@ -103,12 +112,12 @@ export function MindMainPanel({ activeSessionId }: { activeSessionId: string | n
         domain: "mind",
         layer: "episodic",
         sessionId: session.id,
-        content: draft.trim(),
+        content,
       });
 
       const llm = createLlmProvider();
       const history = messages.map((message) => ({
-        role: message.role === "tool" ? "assistant" as const : message.role,
+        role: message.role === "tool" ? ("assistant" as const) : message.role,
         content: message.content,
       }));
       const result = await llm.complete({
@@ -119,7 +128,7 @@ export function MindMainPanel({ activeSessionId }: { activeSessionId: string | n
               "You are a thoughtful companion for self-reflection, motivation, and emotional clarity.",
           },
           ...history,
-          { role: "user", content: draft.trim() },
+          { role: "user", content },
         ],
       });
 
@@ -136,8 +145,9 @@ export function MindMainPanel({ activeSessionId }: { activeSessionId: string | n
         content: result.content,
       });
 
-      setDraft("");
       setMessages(await listMessages(session.id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to send message");
     } finally {
       setBusy(false);
     }
@@ -166,11 +176,15 @@ export function MindMainPanel({ activeSessionId }: { activeSessionId: string | n
         </div>
       </div>
       <div className="chat-composer">
+        {error ? (
+          <div className="settings-message settings-message--error">{error}</div>
+        ) : null}
         <textarea
           className="textarea-input"
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           placeholder="Share what is on your mind..."
+          disabled={busy}
         />
         <button className="primary-button" disabled={busy} onClick={() => void handleSend()}>
           {busy ? "Thinking..." : "Send"}

@@ -13,6 +13,10 @@ export async function saveApiKey(apiKey: string): Promise<void> {
   await invoke("settings_save_api_key", { apiKey });
 }
 
+export async function clearApiKey(): Promise<void> {
+  await invoke("settings_clear_api_key");
+}
+
 export async function completeOnboarding(): Promise<void> {
   await invoke("settings_complete_onboarding");
 }

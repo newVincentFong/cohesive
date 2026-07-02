@@ -1,10 +1,26 @@
-use rusqlite::params;
+use std::fs;
+use std::path::PathBuf;
 
 use crate::db::{with_db, AppState};
 use crate::models::AppSettings;
 
-const SERVICE: &str = "cohesive";
-const USER: &str = "deepseek-api-key";
+const CONFIG_DIR_NAME: &str = ".cohesive";
+const API_KEY_FILE: &str = "api-key";
+
+fn config_dir() -> Result<PathBuf, String> {
+    let home = dirs::home_dir().ok_or_else(|| "Could not resolve home directory".to_string())?;
+    Ok(home.join(CONFIG_DIR_NAME))
+}
+
+fn api_key_path() -> Result<PathBuf, String> {
+    Ok(config_dir()?.join(API_KEY_FILE))
+}
+
+fn ensure_config_dir() -> Result<PathBuf, String> {
+    let dir = config_dir()?;
+    fs::create_dir_all(&dir).map_err(|err| err.to_string())?;
+    Ok(dir)
+}
 
 #[tauri::command]
 pub fn settings_get(state: tauri::State<'_, AppState>) -> Result<AppSettings, String> {
@@ -28,8 +44,33 @@ pub fn settings_get(state: tauri::State<'_, AppState>) -> Result<AppSettings, St
 
 #[tauri::command]
 pub fn settings_save_api_key(api_key: String) -> Result<(), String> {
-    let entry = keyring::Entry::new(SERVICE, USER).map_err(|err| err.to_string())?;
-    entry.set_password(&api_key).map_err(|err| err.to_string())
+    let api_key = api_key.trim().to_string();
+    if api_key.is_empty() {
+        return Err("API key cannot be empty".to_string());
+    }
+
+    ensure_config_dir()?;
+    let path = api_key_path()?;
+    fs::write(&path, &api_key).map_err(|err| err.to_string())?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600))
+            .map_err(|err| err.to_string())?;
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn settings_clear_api_key() -> Result<(), String> {
+    let path = api_key_path()?;
+    match fs::remove_file(&path) {
+        Ok(()) => Ok(()),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(err) => Err(err.to_string()),
+    }
 }
 
 #[tauri::command]
@@ -46,10 +87,17 @@ pub fn settings_complete_onboarding(state: tauri::State<'_, AppState>) -> Result
 }
 
 pub fn get_api_key() -> Result<Option<String>, String> {
-    let entry = keyring::Entry::new(SERVICE, USER).map_err(|err| err.to_string())?;
-    match entry.get_password() {
-        Ok(value) => Ok(Some(value)),
-        Err(keyring::Error::NoEntry) => Ok(None),
+    let path = api_key_path()?;
+    match fs::read_to_string(&path) {
+        Ok(value) => {
+            let trimmed = value.trim().to_string();
+            if trimmed.is_empty() {
+                Ok(None)
+            } else {
+                Ok(Some(trimmed))
+            }
+        }
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(err) => Err(err.to_string()),
     }
 }

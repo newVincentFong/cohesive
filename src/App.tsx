@@ -8,9 +8,11 @@ import {
   OnboardingModal,
   useOnboardingGate,
 } from "@/components/onboarding/OnboardingModal";
+import { SettingsModal } from "@/components/settings/SettingsModal";
 
 export default function App() {
   const { loading, needsOnboarding, refresh } = useOnboardingGate();
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [activeDomain, setActiveDomain] = useState<Domain>("writing");
   const [activeCodeSessionId, setActiveCodeSessionId] = useState<string | null>(null);
   const [activeMindSessionId, setActiveMindSessionId] = useState<string | null>(null);
@@ -62,10 +64,12 @@ export default function App() {
       <AppShell
         activeDomain={activeDomain}
         onDomainChange={setActiveDomain}
+        onOpenSettings={() => setSettingsOpen(true)}
         sidebar={sidebar}
       >
         {mainPanel}
       </AppShell>
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       {needsOnboarding ? (
         <OnboardingModal
           onCompleted={() => {

@@ -37,22 +37,33 @@ pub async fn llm_complete(input: LlmCompletionInput) -> Result<LlmCompletionResu
     let model = input.model.unwrap_or_else(|| DEFAULT_MODEL.to_string());
 
     let client = reqwest::Client::new();
+    let mut body = serde_json::json!({
+        "model": model,
+        "messages": input.messages,
+        "temperature": input.temperature.unwrap_or(0.7),
+        "stream": false
+    });
+    if let Some(max_tokens) = input.max_tokens {
+        body["max_tokens"] = serde_json::json!(max_tokens);
+    }
+
     let response = client
         .post(DEEPSEEK_URL)
         .bearer_auth(api_key)
-        .json(&serde_json::json!({
-            "model": model,
-            "messages": input.messages,
-            "temperature": input.temperature.unwrap_or(0.7),
-            "max_tokens": input.max_tokens,
-            "stream": false
-        }))
+        .json(&body)
         .send()
         .await
         .map_err(|err| err.to_string())?;
 
     if !response.status().is_success() {
-        return Err(format!("DeepSeek request failed: {}", response.status()));
+        let status = response.status();
+        let error_body = response.text().await.unwrap_or_default();
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&error_body) {
+            if let Some(message) = json.pointer("/error/message").and_then(|value| value.as_str()) {
+                return Err(format!("DeepSeek API error ({status}): {message}"));
+            }
+        }
+        return Err(format!("DeepSeek request failed ({status}): {error_body}"));
     }
 
     let payload: DeepSeekResponse = response.json().await.map_err(|err| err.to_string())?;
