@@ -1,14 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import type { CodeMode } from "@/core/session/session.types";
-import type { CodeProject, ToolRun } from "@/core/code/agent.types";
-import {
-  listCodeProjects,
-  listToolRuns,
-  readProjectFile,
-  registerCodeProject,
-  runShellCommand,
-  writeProjectFile,
-} from "@/core/code/agent.service";
+import type { CodeProject } from "@/core/code/agent.types";
+import { listCodeProjects, registerCodeProject } from "@/core/code/agent.service";
 import {
   createMessage,
   listMessages,
@@ -24,7 +17,12 @@ import type { Session } from "@/core/session/session.types";
 import { deriveSessionTitle } from "@/core/session/session.types";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { AgentProgress } from "@/core/code/agents/agent.types";
+import type {
+  AgentTraceCallbacks,
+  AgentTraceColumn,
+} from "@/core/code/agents/agent-trace.types";
 import { runExploreAgent } from "@/core/code/agents/explore-main-agent";
+import { AgentTracePanel } from "@/components/code/AgentTracePanel";
 import { SessionSidebarList } from "@/components/session/SessionSidebarList";
 
 function ToolMessageBody({ message }: { message: Message }) {
@@ -133,29 +131,54 @@ export function CodeSidebar({ activeSessionId, onSelectSession }: CodeSurfacePro
   );
 }
 
+function createTraceCallbacks(
+  setTraceColumns: Dispatch<SetStateAction<AgentTraceColumn[]>>,
+): AgentTraceCallbacks {
+  return {
+    onColumnStart(column) {
+      setTraceColumns((prev) => [
+        ...prev,
+        { ...column, status: "running", messages: [] },
+      ]);
+    },
+    onColumnMessage(columnId, message) {
+      setTraceColumns((prev) =>
+        prev.map((column) =>
+          column.id === columnId
+            ? { ...column, messages: [...column.messages, message] }
+            : column,
+        ),
+      );
+    },
+    onColumnEnd(columnId, status) {
+      setTraceColumns((prev) =>
+        prev.map((column) =>
+          column.id === columnId ? { ...column, status } : column,
+        ),
+      );
+    },
+  };
+}
+
 export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | null }) {
   const [session, setSession] = useState<Session | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [toolRuns, setToolRuns] = useState<ToolRun[]>([]);
   const [draft, setDraft] = useState("");
-  const [filePath, setFilePath] = useState("README.md");
-  const [fileContent, setFileContent] = useState("");
-  const [shellCommand, setShellCommand] = useState("ls");
-  const [pendingConfirmation, setPendingConfirmation] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [agentPhase, setAgentPhase] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [traceExpanded, setTraceExpanded] = useState(false);
+  const [traceColumns, setTraceColumns] = useState<AgentTraceColumn[]>([]);
 
   async function refreshSessionData(nextSession: Session) {
     setMessages(await listMessages(nextSession.id));
-    setToolRuns(await listToolRuns(nextSession.id));
   }
 
   useEffect(() => {
     if (!activeSessionId) {
       setSession(null);
       setMessages([]);
-      setToolRuns([]);
+      setTraceColumns([]);
       return;
     }
 
@@ -198,6 +221,7 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
     setBusy(true);
     setError(null);
     setAgentPhase(null);
+    setTraceColumns([]);
 
     try {
       await createMessage({
@@ -232,6 +256,7 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
 
       setAgentPhase("Exploring...");
       const priorHistory = history.slice(0, -1);
+      const onTrace = createTraceCallbacks(setTraceColumns);
 
       const answer = await runExploreAgent({
         session,
@@ -248,6 +273,7 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
           }
           await persistToolTrace(update);
         },
+        onTrace,
       });
 
       await createMessage({
@@ -265,80 +291,42 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
     }
   }
 
-  async function handleReadFile() {
-    if (!session?.projectId) return;
-    const project = (await listCodeProjects()).find((item) => item.id === session.projectId);
-    if (!project) return;
-    const content = await readProjectFile({
-      sessionId: session.id,
-      projectPath: project.path,
-      mode: session.mode ?? "plan",
-      relativePath: filePath,
-    });
-    setFileContent(content);
-  }
-
-  async function handleWriteFile(confirmed = false) {
-    if (!session?.projectId) return;
-    const project = (await listCodeProjects()).find((item) => item.id === session.projectId);
-    if (!project) return;
-    const toolRun = await writeProjectFile({
-      sessionId: session.id,
-      projectPath: project.path,
-      mode: session.mode ?? "plan",
-      relativePath: filePath,
-      content: fileContent,
-      confirmed,
-    });
-    if (toolRun.status === "pending" && toolRun.requiresConfirmation) {
-      setPendingConfirmation(toolRun.id);
-      return;
-    }
-    setPendingConfirmation(null);
-    await refreshSessionData(session);
-  }
-
-  async function handleRunShell(confirmed = false) {
-    if (!session?.projectId) return;
-    const project = (await listCodeProjects()).find((item) => item.id === session.projectId);
-    if (!project) return;
-    const result = await runShellCommand({
-      sessionId: session.id,
-      projectPath: project.path,
-      mode: session.mode ?? "plan",
-      command: shellCommand,
-      confirmed,
-    });
-    if (result.blockedReason) {
-      setPendingConfirmation(result.toolRun.id);
-      return;
-    }
-    setPendingConfirmation(null);
-    await refreshSessionData(session);
-  }
-
   if (!session) {
     return <div className="empty-state">Pick a project and start a code session.</div>;
   }
+
+  const isExploreMode = (session.mode ?? "plan") === "explore";
 
   return (
     <>
       <div className="panel-header">
         <strong>{session.title}</strong>
-        <div className="mode-switch">
-          {(["plan", "explore", "build"] as CodeMode[]).map((mode) => (
+        <div className="panel-header-actions">
+          <div className="mode-switch">
+            {(["plan", "explore", "build"] as CodeMode[]).map((mode) => (
+              <button
+                key={mode}
+                className={session.mode === mode ? "active" : undefined}
+                onClick={() => void handleModeChange(mode)}
+              >
+                {mode}
+              </button>
+            ))}
+          </div>
+          {isExploreMode ? (
             <button
-              key={mode}
-              className={session.mode === mode ? "active" : undefined}
-              onClick={() => void handleModeChange(mode)}
+              type="button"
+              className="secondary-button trace-toggle-button"
+              onClick={() => setTraceExpanded(!traceExpanded)}
             >
-              {mode}
+              {busy ? <span className="trace-running-dot" aria-hidden="true" /> : null}
+              {traceExpanded ? "Hide trace" : "Show trace"}
             </button>
-          ))}
+          ) : null}
         </div>
       </div>
       <div className="panel-body">
-        <div className="panel-grid">
+        <div className={`panel-grid ${traceExpanded ? "panel-grid--trace-expanded" : ""}`}>
           <section className="panel-section">
             <h3 className="section-title">Agent chat</h3>
             <div className="chat-thread compact">
@@ -365,7 +353,7 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
                 placeholder={
-                  (session.mode ?? "plan") === "explore"
+                  isExploreMode
                     ? "Ask the coding agent to explore this codebase..."
                     : "Switch to explore mode for agent chat"
                 }
@@ -380,65 +368,11 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
               </button>
             </div>
           </section>
-          <section className="panel-section">
-            <h3 className="section-title">Project tools</h3>
-            <div className="stack">
-              <input
-                className="text-input"
-                value={filePath}
-                onChange={(event) => setFilePath(event.target.value)}
-                placeholder="Relative file path"
-              />
-              <textarea
-                className="textarea-input"
-                value={fileContent}
-                onChange={(event) => setFileContent(event.target.value)}
-                placeholder="File content"
-              />
-              <div className="row">
-                <button className="secondary-button" onClick={() => void handleReadFile()}>
-                  Read file
-                </button>
-                <button className="secondary-button" onClick={() => void handleWriteFile()}>
-                  Write file
-                </button>
-              </div>
-              <input
-                className="text-input"
-                value={shellCommand}
-                onChange={(event) => setShellCommand(event.target.value)}
-                placeholder="Shell command"
-              />
-              <button className="secondary-button" onClick={() => void handleRunShell()}>
-                Run command
-              </button>
-              {pendingConfirmation ? (
-                <div className="tool-run">
-                  <div>This action requires confirmation in build mode.</div>
-                  <button
-                    className="primary-button"
-                    onClick={() => {
-                      void handleRunShell(true);
-                      void handleWriteFile(true);
-                    }}
-                  >
-                    Confirm
-                  </button>
-                </div>
-              ) : null}
-            </div>
-            <h3 className="section-title section-title-spaced">Tool runs</h3>
-            {toolRuns.map((toolRun) => (
-              <div key={toolRun.id} className="tool-run">
-                <div>
-                  {toolRun.kind} · {toolRun.status}
-                  {toolRun.command ? ` · ${toolRun.command}` : ""}
-                </div>
-                {toolRun.stdoutTail ? <pre>{toolRun.stdoutTail}</pre> : null}
-                {toolRun.stderrTail ? <pre>{toolRun.stderrTail}</pre> : null}
-              </div>
-            ))}
-          </section>
+          {traceExpanded ? (
+            <section className="panel-section">
+              <AgentTracePanel columns={traceColumns} />
+            </section>
+          ) : null}
         </div>
       </div>
     </>

@@ -6,6 +6,12 @@ import type {
 } from "@/core/llm/llm.types";
 import type { AgentContext, AgentTool } from "./agent.types";
 
+export interface AgentLoopMessageEvent {
+  message: LlmMessage;
+  iteration: number;
+  index: number;
+}
+
 export interface AgentLoopConfig {
   systemPrompt: string;
   messages: LlmMessage[];
@@ -14,6 +20,7 @@ export interface AgentLoopConfig {
   temperature?: number;
   ctx: AgentContext;
   onToolCall?: (toolName: string, args: unknown) => Promise<void>;
+  onLoopMessage?: (event: AgentLoopMessageEvent) => void | Promise<void>;
 }
 
 export interface AgentLoopResult {
@@ -40,12 +47,34 @@ function parseToolArgs(raw: string): unknown {
   }
 }
 
+async function emitLoopMessage(
+  config: AgentLoopConfig,
+  message: LlmMessage,
+  iteration: number,
+  indexRef: { value: number },
+): Promise<void> {
+  if (!config.onLoopMessage) return;
+  const event: AgentLoopMessageEvent = {
+    message,
+    iteration,
+    index: indexRef.value,
+  };
+  indexRef.value += 1;
+  await config.onLoopMessage(event);
+}
+
 export async function runAgentLoop(config: AgentLoopConfig): Promise<AgentLoopResult> {
   const llm = createLlmProvider();
   const messages: LlmMessage[] = [
     { role: "system", content: config.systemPrompt },
     ...config.messages,
   ];
+  const indexRef = { value: 0 };
+
+  await emitLoopMessage(config, { role: "system", content: config.systemPrompt }, -1, indexRef);
+  for (const message of config.messages) {
+    await emitLoopMessage(config, message, -1, indexRef);
+  }
 
   for (let iteration = 0; iteration < config.maxIterations; iteration += 1) {
     const result = await llm.complete({
@@ -60,7 +89,9 @@ export async function runAgentLoop(config: AgentLoopConfig): Promise<AgentLoopRe
       const content =
         result.content.trim() ||
         "I could not produce a response. Please try rephrasing your question.";
-      messages.push({ role: "assistant", content });
+      const assistantMessage: LlmMessage = { role: "assistant", content };
+      messages.push(assistantMessage);
+      await emitLoopMessage(config, assistantMessage, iteration, indexRef);
       return { content, messages: messages.slice(1) };
     }
 
@@ -70,20 +101,25 @@ export async function runAgentLoop(config: AgentLoopConfig): Promise<AgentLoopRe
       toolCalls,
     };
     messages.push(assistantMessage);
+    await emitLoopMessage(config, assistantMessage, iteration, indexRef);
 
     for (const toolCall of toolCalls) {
       const output = await dispatchToolCall(toolCall, config);
-      messages.push({
+      const toolMessage: LlmMessage = {
         role: "tool",
         toolCallId: toolCall.id,
         content: output,
-      });
+      };
+      messages.push(toolMessage);
+      await emitLoopMessage(config, toolMessage, iteration, indexRef);
     }
   }
 
   const timeoutMessage =
     "Exploration reached the iteration limit. Summarize what was found so far or ask a narrower question.";
-  messages.push({ role: "assistant", content: timeoutMessage });
+  const timeoutAssistant: LlmMessage = { role: "assistant", content: timeoutMessage };
+  messages.push(timeoutAssistant);
+  await emitLoopMessage(config, timeoutAssistant, config.maxIterations, indexRef);
   return { content: timeoutMessage, messages: messages.slice(1) };
 }
 

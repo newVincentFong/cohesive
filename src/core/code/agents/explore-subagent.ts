@@ -1,6 +1,6 @@
 import { readProjectFile } from "@/core/code/agent.service";
 import type { LlmMessage } from "@/core/llm/llm.types";
-import { runAgentLoop } from "./agent-loop";
+import { runAgentLoop, type AgentLoopMessageEvent } from "./agent-loop";
 import type {
   AgentContext,
   AgentTool,
@@ -92,6 +92,7 @@ export async function runExploreSubAgent(input: {
   task: ExploreTask;
   ctx: AgentContext;
   onRead?: (trace: ToolTrace) => Promise<void>;
+  onLoopMessage?: (event: AgentLoopMessageEvent) => void | Promise<void>;
 }): Promise<string> {
   const messages: LlmMessage[] = [
     { role: "user", content: buildSubAgentUserMessage(input.task) },
@@ -104,6 +105,7 @@ export async function runExploreSubAgent(input: {
     maxIterations: SUB_AGENT_MAX_ITERATIONS,
     temperature: 0.2,
     ctx: input.ctx,
+    onLoopMessage: input.onLoopMessage,
   });
 
   return result.content;
