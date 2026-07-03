@@ -23,14 +23,24 @@ export interface TracedMessage {
 export interface AgentTraceCallbacks {
   onColumnStart(column: Pick<AgentTraceColumn, "id" | "kind" | "label" | "tools">): void;
   onColumnMessage(columnId: string, message: TracedMessage): void;
+  onColumnMessageUpdate(
+    columnId: string,
+    messageId: string,
+    patch: Partial<TracedMessage>,
+  ): void;
   onColumnEnd(columnId: string, status: "done" | "error"): void;
 }
 
 export function createTracedMessage(
-  event: { message: LlmMessage; iteration: number; index: number },
+  event: {
+    message: LlmMessage;
+    iteration: number;
+    index: number;
+    messageId: string;
+  },
 ): TracedMessage {
   return {
-    id: crypto.randomUUID(),
+    id: event.messageId,
     iteration: event.iteration,
     index: event.index,
     role: event.message.role,

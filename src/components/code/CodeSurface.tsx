@@ -23,7 +23,27 @@ import type {
 } from "@/core/code/agents/agent-trace.types";
 import { runExploreAgent } from "@/core/code/agents/explore-main-agent";
 import { AgentTracePanel } from "@/components/code/AgentTracePanel";
+import { MarkdownMessage } from "@/components/message/MarkdownMessage";
+import { STREAMING_MESSAGE_ID } from "@/core/message/streaming.constants";
 import { SessionSidebarList } from "@/components/session/SessionSidebarList";
+
+function upsertStreamingAssistant(
+  messages: Message[],
+  sessionId: string,
+  content: string,
+): Message[] {
+  const withoutStreaming = messages.filter((message) => message.id !== STREAMING_MESSAGE_ID);
+  return [
+    ...withoutStreaming,
+    {
+      id: STREAMING_MESSAGE_ID,
+      sessionId,
+      role: "assistant",
+      content,
+      createdAt: new Date().toISOString(),
+    },
+  ];
+}
 
 function ToolMessageBody({ message }: { message: Message }) {
   const [expanded, setExpanded] = useState(false);
@@ -34,8 +54,8 @@ function ToolMessageBody({ message }: { message: Message }) {
       {message.toolName ? (
         <span className="tool-message-badge">{message.toolName}</span>
       ) : null}
-      <div className="tool-message-content">
-        {isLong && !expanded ? `${message.content.slice(0, 600)}…` : message.content}
+      <div className={isLong && !expanded ? "tool-message-content--collapsed" : undefined}>
+        <MarkdownMessage content={message.content} mode="static" className="tool-message-content" />
       </div>
       {isLong ? (
         <button className="secondary-button tool-message-toggle" onClick={() => setExpanded(!expanded)}>
@@ -150,6 +170,20 @@ function createTraceCallbacks(
         ),
       );
     },
+    onColumnMessageUpdate(columnId, messageId, patch) {
+      setTraceColumns((prev) =>
+        prev.map((column) =>
+          column.id === columnId
+            ? {
+                ...column,
+                messages: column.messages.map((message) =>
+                  message.id === messageId ? { ...message, ...patch } : message,
+                ),
+              }
+            : column,
+        ),
+      );
+    },
     onColumnEnd(columnId, status) {
       setTraceColumns((prev) =>
         prev.map((column) =>
@@ -257,6 +291,7 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
       setAgentPhase("Exploring...");
       const priorHistory = history.slice(0, -1);
       const onTrace = createTraceCallbacks(setTraceColumns);
+      setMessages((prev) => upsertStreamingAssistant(prev, session.id, ""));
 
       const answer = await runExploreAgent({
         session,
@@ -274,6 +309,9 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
           await persistToolTrace(update);
         },
         onTrace,
+        onAnswerDelta: (streamingContent) => {
+          setMessages((prev) => upsertStreamingAssistant(prev, session.id, streamingContent));
+        },
       });
 
       await createMessage({
@@ -339,7 +377,10 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
                   {message.role === "tool" ? (
                     <ToolMessageBody message={message} />
                   ) : (
-                    <div>{message.content}</div>
+                    <MarkdownMessage
+                      content={message.content}
+                      isAnimating={busy && message.id === STREAMING_MESSAGE_ID}
+                    />
                   )}
                 </div>
               ))}

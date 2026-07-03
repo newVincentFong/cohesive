@@ -7,9 +7,16 @@ import type {
 import type { AgentContext, AgentTool } from "./agent.types";
 
 export interface AgentLoopMessageEvent {
+  messageId: string;
   message: LlmMessage;
   iteration: number;
   index: number;
+}
+
+export interface AgentLoopMessageUpdateEvent {
+  messageId: string;
+  message: LlmMessage;
+  iteration: number;
 }
 
 export interface AgentLoopConfig {
@@ -21,6 +28,8 @@ export interface AgentLoopConfig {
   ctx: AgentContext;
   onToolCall?: (toolName: string, args: unknown) => Promise<void>;
   onLoopMessage?: (event: AgentLoopMessageEvent) => void | Promise<void>;
+  onLoopMessageUpdate?: (event: AgentLoopMessageUpdateEvent) => void | Promise<void>;
+  onContentDelta?: (delta: string, content: string) => void | Promise<void>;
 }
 
 export interface AgentLoopResult {
@@ -52,15 +61,37 @@ async function emitLoopMessage(
   message: LlmMessage,
   iteration: number,
   indexRef: { value: number },
-): Promise<void> {
-  if (!config.onLoopMessage) return;
+  messageId?: string,
+): Promise<string> {
+  const nextMessageId = messageId ?? crypto.randomUUID();
+  if (!config.onLoopMessage) {
+    if (!messageId) {
+      indexRef.value += 1;
+    }
+    return nextMessageId;
+  }
+
   const event: AgentLoopMessageEvent = {
+    messageId: nextMessageId,
     message,
     iteration,
     index: indexRef.value,
   };
-  indexRef.value += 1;
+  if (!messageId) {
+    indexRef.value += 1;
+  }
   await config.onLoopMessage(event);
+  return nextMessageId;
+}
+
+async function updateLoopMessage(
+  config: AgentLoopConfig,
+  messageId: string,
+  message: LlmMessage,
+  iteration: number,
+): Promise<void> {
+  if (!config.onLoopMessageUpdate) return;
+  await config.onLoopMessageUpdate({ messageId, message, iteration });
 }
 
 export async function runAgentLoop(config: AgentLoopConfig): Promise<AgentLoopResult> {
@@ -77,12 +108,35 @@ export async function runAgentLoop(config: AgentLoopConfig): Promise<AgentLoopRe
   }
 
   for (let iteration = 0; iteration < config.maxIterations; iteration += 1) {
-    const result = await llm.complete({
-      messages,
-      tools: agentToolsToLlmDefinitions(config.tools),
-      toolChoice: "auto",
-      temperature: config.temperature ?? 0.3,
-    });
+    const streamingMessageId = crypto.randomUUID();
+    let streamingContent = "";
+
+    await emitLoopMessage(
+      config,
+      { role: "assistant", content: "" },
+      iteration,
+      indexRef,
+      streamingMessageId,
+    );
+
+    const result = await llm.streamWithHandler(
+      {
+        messages,
+        tools: agentToolsToLlmDefinitions(config.tools),
+        toolChoice: "auto",
+        temperature: config.temperature ?? 0.3,
+      },
+      async (chunk) => {
+        if (!chunk.delta) return;
+        streamingContent += chunk.delta;
+        const streamingMessage: LlmMessage = {
+          role: "assistant",
+          content: streamingContent,
+        };
+        await updateLoopMessage(config, streamingMessageId, streamingMessage, iteration);
+        await config.onContentDelta?.(chunk.delta, streamingContent);
+      },
+    );
 
     const toolCalls = result.toolCalls ?? [];
     if (toolCalls.length === 0) {
@@ -91,7 +145,7 @@ export async function runAgentLoop(config: AgentLoopConfig): Promise<AgentLoopRe
         "I could not produce a response. Please try rephrasing your question.";
       const assistantMessage: LlmMessage = { role: "assistant", content };
       messages.push(assistantMessage);
-      await emitLoopMessage(config, assistantMessage, iteration, indexRef);
+      await updateLoopMessage(config, streamingMessageId, assistantMessage, iteration);
       return { content, messages: messages.slice(1) };
     }
 
@@ -101,7 +155,7 @@ export async function runAgentLoop(config: AgentLoopConfig): Promise<AgentLoopRe
       toolCalls,
     };
     messages.push(assistantMessage);
-    await emitLoopMessage(config, assistantMessage, iteration, indexRef);
+    await updateLoopMessage(config, streamingMessageId, assistantMessage, iteration);
 
     for (const toolCall of toolCalls) {
       const output = await dispatchToolCall(toolCall, config);

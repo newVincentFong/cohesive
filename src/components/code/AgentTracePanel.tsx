@@ -48,7 +48,7 @@ function AgentTraceColumnView({ column }: { column: AgentTraceColumn }) {
     const element = scrollRef.current;
     if (!element) return;
     element.scrollTop = element.scrollHeight;
-  }, [column.messages.length]);
+  }, [column.messages]);
 
   const title = column.kind === "main" ? "Main agent" : `Sub · ${column.label}`;
 
@@ -64,7 +64,12 @@ function AgentTraceColumnView({ column }: { column: AgentTraceColumn }) {
           <div className="muted agent-trace-empty">Waiting for messages…</div>
         ) : (
           column.messages.map((message) => (
-            <AgentLoopMessage key={message.id} message={message} />
+            <AgentLoopMessage
+              key={message.id}
+              message={message}
+              columnRunning={column.status === "running"}
+              allMessages={column.messages}
+            />
           ))
         )}
       </div>

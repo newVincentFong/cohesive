@@ -59,4 +59,8 @@ export interface LlmStreamChunk {
 export interface LlmProvider {
   complete(input: LlmCompletionInput): Promise<LlmCompletionResult>;
   stream(input: LlmCompletionInput): AsyncIterable<LlmStreamChunk>;
+  streamWithHandler(
+    input: LlmCompletionInput,
+    onChunk: (chunk: LlmStreamChunk) => void,
+  ): Promise<LlmCompletionResult>;
 }

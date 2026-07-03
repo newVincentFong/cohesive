@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { TracedMessage } from "@/core/code/agents/agent-trace.types";
+import { MarkdownMessage } from "@/components/message/MarkdownMessage";
 
 const LONG_CONTENT_THRESHOLD = 600;
 const SYSTEM_PREVIEW_LENGTH = 120;
@@ -17,14 +18,14 @@ function ToolCallsBlock({ toolCalls }: { toolCalls: NonNullable<TracedMessage["t
   );
 }
 
-function ExpandableContent({ content }: { content: string }) {
+function ExpandableMarkdown({ content }: { content: string }) {
   const [expanded, setExpanded] = useState(false);
   const isLong = content.length > LONG_CONTENT_THRESHOLD;
 
   return (
     <>
-      <div className="agent-loop-message-content">
-        {isLong && !expanded ? `${content.slice(0, LONG_CONTENT_THRESHOLD)}…` : content}
+      <div className={isLong && !expanded ? "tool-message-content--collapsed" : undefined}>
+        <MarkdownMessage content={content} mode="static" />
       </div>
       {isLong ? (
         <button
@@ -39,8 +40,29 @@ function ExpandableContent({ content }: { content: string }) {
   );
 }
 
-export function AgentLoopMessage({ message }: { message: TracedMessage }) {
+function isLastStreamingAssistant(
+  message: TracedMessage,
+  messages: TracedMessage[],
+  columnRunning: boolean,
+): boolean {
+  if (!columnRunning || message.role !== "assistant") {
+    return false;
+  }
+  const assistants = messages.filter((item) => item.role === "assistant");
+  return assistants[assistants.length - 1]?.id === message.id;
+}
+
+export function AgentLoopMessage({
+  message,
+  columnRunning = false,
+  allMessages = [],
+}: {
+  message: TracedMessage;
+  columnRunning?: boolean;
+  allMessages?: TracedMessage[];
+}) {
   const [systemExpanded, setSystemExpanded] = useState(false);
+  const isAnimating = isLastStreamingAssistant(message, allMessages, columnRunning);
 
   if (message.role === "system") {
     const preview = message.content?.slice(0, SYSTEM_PREVIEW_LENGTH) ?? "";
@@ -49,9 +71,11 @@ export function AgentLoopMessage({ message }: { message: TracedMessage }) {
     return (
       <div className="agent-loop-message agent-loop-message--system">
         <div className="agent-loop-message-role">system</div>
-        <div className="agent-loop-message-content">
-          {systemExpanded || !isLong ? message.content : `${preview}…`}
-        </div>
+        {systemExpanded || !isLong ? (
+          <MarkdownMessage content={message.content ?? ""} mode="static" />
+        ) : (
+          <div className="agent-loop-message-content">{`${preview}…`}</div>
+        )}
         {isLong ? (
           <button
             type="button"
@@ -69,7 +93,7 @@ export function AgentLoopMessage({ message }: { message: TracedMessage }) {
     return (
       <div className="agent-loop-message agent-loop-message--user">
         <div className="agent-loop-message-role">user</div>
-        <div className="agent-loop-message-content">{message.content}</div>
+        <MarkdownMessage content={message.content ?? ""} mode="static" />
       </div>
     );
   }
@@ -79,7 +103,7 @@ export function AgentLoopMessage({ message }: { message: TracedMessage }) {
       <div className="agent-loop-message agent-loop-message--assistant">
         <div className="agent-loop-message-role">assistant</div>
         {message.content ? (
-          <div className="agent-loop-message-content">{message.content}</div>
+          <MarkdownMessage content={message.content} isAnimating={isAnimating} />
         ) : null}
         {message.toolCalls && message.toolCalls.length > 0 ? (
           <ToolCallsBlock toolCalls={message.toolCalls} />
@@ -94,7 +118,7 @@ export function AgentLoopMessage({ message }: { message: TracedMessage }) {
         tool
         {message.toolCallId ? ` · ${message.toolCallId.slice(0, 8)}` : ""}
       </div>
-      {message.content ? <ExpandableContent content={message.content} /> : null}
+      {message.content ? <ExpandableMarkdown content={message.content} /> : null}
     </div>
   );
 }

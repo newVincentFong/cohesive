@@ -2,7 +2,7 @@ import type { Message } from "@/core/message/message.types";
 import type { LlmMessage } from "@/core/llm/llm.types";
 import type { Session } from "@/core/session/session.types";
 import type { CodeProject } from "@/core/code/agent.types";
-import { agentToolsToLlmDefinitions, runAgentLoop, type AgentLoopMessageEvent } from "./agent-loop";
+import { agentToolsToLlmDefinitions, runAgentLoop, type AgentLoopMessageEvent, type AgentLoopMessageUpdateEvent } from "./agent-loop";
 import { getExploreSubAgentTools, runExploreSubAgent } from "./explore-subagent";
 import type { AgentContext, AgentProgress, AgentTool, ExploreTask } from "./agent.types";
 import type { AgentTraceCallbacks } from "./agent-trace.types";
@@ -31,6 +31,19 @@ function historyToLlmMessages(history: Message[]): LlmMessage[] {
       role: message.role as "user" | "assistant",
       content: message.content,
     }));
+}
+
+function createLoopMessageUpdateHandler(
+  onTrace: AgentTraceCallbacks | undefined,
+  columnId: string,
+): ((event: AgentLoopMessageUpdateEvent) => void | Promise<void>) | undefined {
+  if (!onTrace) return undefined;
+  return async (event) => {
+    onTrace.onColumnMessageUpdate(columnId, event.messageId, {
+      content: event.message.content,
+      toolCalls: event.message.toolCalls,
+    });
+  };
 }
 
 function createLoopMessageHandler(
@@ -98,6 +111,7 @@ function createExploreCodebaseTool(
             await onProgress({ phase: "reading", toolTrace: trace });
           },
           onLoopMessage: createLoopMessageHandler(onTrace, subId),
+          onLoopMessageUpdate: createLoopMessageUpdateHandler(onTrace, subId),
         });
 
         onTrace?.onColumnEnd(subId, "done");
@@ -127,6 +141,7 @@ export async function runExploreAgent(input: {
   history: Message[];
   onProgress: (update: AgentProgress) => Promise<void>;
   onTrace?: AgentTraceCallbacks;
+  onAnswerDelta?: (content: string) => void | Promise<void>;
 }): Promise<string> {
   const ctx: AgentContext = {
     session: input.session,
@@ -154,6 +169,10 @@ export async function runExploreAgent(input: {
       temperature: 0.4,
       ctx,
       onLoopMessage: createLoopMessageHandler(input.onTrace, MAIN_COLUMN_ID),
+      onLoopMessageUpdate: createLoopMessageUpdateHandler(input.onTrace, MAIN_COLUMN_ID),
+      onContentDelta: async (_delta, content) => {
+        await input.onAnswerDelta?.(content);
+      },
     });
 
     input.onTrace?.onColumnEnd(MAIN_COLUMN_ID, "done");

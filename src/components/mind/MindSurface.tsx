@@ -11,11 +11,31 @@ import {
 } from "@/core/session/session.service";
 import { getDomainMemoryStore } from "@/core/memory/memory-registry";
 import { createLlmProvider } from "@/core/llm/deepseek-provider";
+import { STREAMING_MESSAGE_ID } from "@/core/message/streaming.constants";
+import { MarkdownMessage } from "@/components/message/MarkdownMessage";
 import { SessionSidebarList } from "@/components/session/SessionSidebarList";
 
 interface MindSurfaceProps {
   activeSessionId: string | null;
   onSelectSession: (sessionId: string | null) => void;
+}
+
+function upsertStreamingAssistant(
+  messages: Message[],
+  sessionId: string,
+  content: string,
+): Message[] {
+  const withoutStreaming = messages.filter((message) => message.id !== STREAMING_MESSAGE_ID);
+  return [
+    ...withoutStreaming,
+    {
+      id: STREAMING_MESSAGE_ID,
+      sessionId,
+      role: "assistant",
+      content,
+      createdAt: new Date().toISOString(),
+    },
+  ];
 }
 
 export function MindSidebar({ activeSessionId, onSelectSession }: MindSurfaceProps) {
@@ -98,7 +118,8 @@ export function MindMainPanel({ activeSessionId }: { activeSessionId: string | n
       });
 
       setDraft("");
-      setMessages(await listMessages(session.id));
+      const history = await listMessages(session.id);
+      setMessages(upsertStreamingAssistant(history, session.id, ""));
 
       if (isFirstMessage) {
         const updated = await updateSession(session.id, {
@@ -116,21 +137,31 @@ export function MindMainPanel({ activeSessionId }: { activeSessionId: string | n
       });
 
       const llm = createLlmProvider();
-      const history = messages.map((message) => ({
+      const priorMessages = history.filter((message) => message.role !== "tool");
+      const llmHistory = priorMessages.map((message) => ({
         role: message.role === "tool" ? ("assistant" as const) : message.role,
         content: message.content,
       }));
-      const result = await llm.complete({
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are a thoughtful companion for self-reflection, motivation, and emotional clarity.",
-          },
-          ...history,
-          { role: "user", content },
-        ],
-      });
+
+      let streamingContent = "";
+      const result = await llm.streamWithHandler(
+        {
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are a thoughtful companion for self-reflection, motivation, and emotional clarity.",
+            },
+            ...llmHistory,
+            { role: "user", content },
+          ],
+        },
+        (chunk) => {
+          if (!chunk.delta) return;
+          streamingContent += chunk.delta;
+          setMessages((prev) => upsertStreamingAssistant(prev, session.id, streamingContent));
+        },
+      );
 
       await createMessage({
         sessionId: session.id,
@@ -148,6 +179,9 @@ export function MindMainPanel({ activeSessionId }: { activeSessionId: string | n
       setMessages(await listMessages(session.id));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to send message");
+      if (session) {
+        setMessages(await listMessages(session.id));
+      }
     } finally {
       setBusy(false);
     }
@@ -170,7 +204,10 @@ export function MindMainPanel({ activeSessionId }: { activeSessionId: string | n
               <div className="muted chat-message-role">
                 {message.role}
               </div>
-              <div>{message.content}</div>
+              <MarkdownMessage
+                content={message.content}
+                isAnimating={busy && message.id === STREAMING_MESSAGE_ID}
+              />
             </div>
           ))}
         </div>
