@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@codemirror/commands": "^6.8.0",
@@ -28,6 +29,7 @@
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
     "@vitejs/plugin-react": "^4.3.4",
+    "patch-package": "^8.0.1",
     "tailwindcss": "^4.3.2",
     "typescript": "^5.8.2",
     "vite": "^6.2.0"
