@@ -2,8 +2,8 @@ import type { Message } from "@/core/message/message.types";
 import type { LlmMessage } from "@/core/llm/llm.types";
 import type { Session } from "@/core/session/session.types";
 import type { CodeProject } from "@/core/code/agent.types";
-import { runAgentLoop, type AgentLoopMessageEvent } from "./agent-loop";
-import { runExploreSubAgent } from "./explore-subagent";
+import { agentToolsToLlmDefinitions, runAgentLoop, type AgentLoopMessageEvent } from "./agent-loop";
+import { getExploreSubAgentTools, runExploreSubAgent } from "./explore-subagent";
 import type { AgentContext, AgentProgress, AgentTool, ExploreTask } from "./agent.types";
 import type { AgentTraceCallbacks } from "./agent-trace.types";
 import { createTracedMessage } from "./agent-trace.types";
@@ -83,7 +83,12 @@ function createExploreCodebaseTool(
       });
 
       const subId = crypto.randomUUID();
-      onTrace?.onColumnStart({ id: subId, kind: "sub", label: task.task });
+      onTrace?.onColumnStart({
+        id: subId,
+        kind: "sub",
+        label: task.task,
+        tools: agentToolsToLlmDefinitions(getExploreSubAgentTools()),
+      });
 
       try {
         const summary = await runExploreSubAgent({
@@ -129,7 +134,14 @@ export async function runExploreAgent(input: {
     onProgress: input.onProgress,
   };
 
-  input.onTrace?.onColumnStart({ id: MAIN_COLUMN_ID, kind: "main", label: "Main agent" });
+  const mainTools = [createExploreCodebaseTool(input.onProgress, input.onTrace)];
+
+  input.onTrace?.onColumnStart({
+    id: MAIN_COLUMN_ID,
+    kind: "main",
+    label: "Main agent",
+    tools: agentToolsToLlmDefinitions(mainTools),
+  });
 
   const historyMessages = historyToLlmMessages(input.history);
 
@@ -137,7 +149,7 @@ export async function runExploreAgent(input: {
     const result = await runAgentLoop({
       systemPrompt: EXPLORE_MAIN_AGENT_PROMPT,
       messages: [...historyMessages, { role: "user", content: input.userMessage }],
-      tools: [createExploreCodebaseTool(input.onProgress, input.onTrace)],
+      tools: mainTools,
       maxIterations: MAIN_AGENT_MAX_ITERATIONS,
       temperature: 0.4,
       ctx,

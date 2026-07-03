@@ -80,6 +80,12 @@ function createReadFileTool(onRead?: (trace: ToolTrace) => Promise<void>): Agent
   };
 }
 
+export function getExploreSubAgentTools(
+  onRead?: (trace: ToolTrace) => Promise<void>,
+): AgentTool[] {
+  return [createReadFileTool(onRead)];
+}
+
 function buildSubAgentUserMessage(task: ExploreTask): string {
   const paths =
     task.startingPaths && task.startingPaths.length > 0
@@ -101,7 +107,7 @@ export async function runExploreSubAgent(input: {
   const result = await runAgentLoop({
     systemPrompt: EXPLORE_SUB_AGENT_PROMPT,
     messages,
-    tools: [createReadFileTool(input.onRead)],
+    tools: getExploreSubAgentTools(input.onRead),
     maxIterations: SUB_AGENT_MAX_ITERATIONS,
     temperature: 0.2,
     ctx: input.ctx,

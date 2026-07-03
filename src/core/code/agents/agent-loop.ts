@@ -28,7 +28,7 @@ export interface AgentLoopResult {
   messages: LlmMessage[];
 }
 
-function toLlmTools(tools: AgentTool[]): LlmToolDefinition[] {
+export function agentToolsToLlmDefinitions(tools: AgentTool[]): LlmToolDefinition[] {
   return tools.map((tool) => ({
     type: "function" as const,
     function: {
@@ -79,7 +79,7 @@ export async function runAgentLoop(config: AgentLoopConfig): Promise<AgentLoopRe
   for (let iteration = 0; iteration < config.maxIterations; iteration += 1) {
     const result = await llm.complete({
       messages,
-      tools: toLlmTools(config.tools),
+      tools: agentToolsToLlmDefinitions(config.tools),
       toolChoice: "auto",
       temperature: config.temperature ?? 0.3,
     });

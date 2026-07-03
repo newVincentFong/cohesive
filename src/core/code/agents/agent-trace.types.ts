@@ -1,10 +1,11 @@
-import type { LlmMessage, LlmToolCall } from "@/core/llm/llm.types";
+import type { LlmMessage, LlmToolCall, LlmToolDefinition } from "@/core/llm/llm.types";
 
 export interface AgentTraceColumn {
   id: string;
   kind: "main" | "sub";
   label: string;
   status: "running" | "done" | "error";
+  tools: LlmToolDefinition[];
   messages: TracedMessage[];
 }
 
@@ -20,7 +21,7 @@ export interface TracedMessage {
 }
 
 export interface AgentTraceCallbacks {
-  onColumnStart(column: Pick<AgentTraceColumn, "id" | "kind" | "label">): void;
+  onColumnStart(column: Pick<AgentTraceColumn, "id" | "kind" | "label" | "tools">): void;
   onColumnMessage(columnId: string, message: TracedMessage): void;
   onColumnEnd(columnId: string, status: "done" | "error"): void;
 }
