@@ -10,7 +10,8 @@ CREATE TABLE IF NOT EXISTS sessions (
   domain TEXT NOT NULL,
   title TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'active',
-  mode TEXT,
+  default_mode TEXT,
+  current_leaf_message_id TEXT,
   project_id TEXT,
   document_id TEXT,
   memory_scope_id TEXT NOT NULL,
@@ -23,11 +24,29 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE TABLE IF NOT EXISTS messages (
   id TEXT PRIMARY KEY,
   session_id TEXT NOT NULL,
+  parent_message_id TEXT,
+  agent_run_id TEXT,
   role TEXT NOT NULL,
   content TEXT NOT NULL,
   tool_name TEXT,
   tool_payload TEXT,
   created_at TEXT NOT NULL,
+  FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+  FOREIGN KEY(parent_message_id) REFERENCES messages(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS agent_runs (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL,
+  parent_message_id TEXT,
+  user_message_id TEXT NOT NULL,
+  assistant_message_id TEXT,
+  mode TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'running',
+  toolset_snapshot_json TEXT,
+  permission_snapshot_json TEXT,
+  created_at TEXT NOT NULL,
+  finished_at TEXT,
   FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
 );
 
@@ -51,6 +70,8 @@ CREATE TABLE IF NOT EXISTS writing_documents (
 CREATE TABLE IF NOT EXISTS tool_runs (
   id TEXT PRIMARY KEY,
   session_id TEXT NOT NULL,
+  run_id TEXT,
+  message_id TEXT,
   kind TEXT NOT NULL,
   command TEXT,
   cwd TEXT,
@@ -97,5 +118,9 @@ END;
 
 CREATE INDEX IF NOT EXISTS idx_sessions_domain ON sessions(domain);
 CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id);
+CREATE INDEX IF NOT EXISTS idx_messages_parent ON messages(parent_message_id);
+CREATE INDEX IF NOT EXISTS idx_messages_agent_run ON messages(agent_run_id);
+CREATE INDEX IF NOT EXISTS idx_agent_runs_session ON agent_runs(session_id);
 CREATE INDEX IF NOT EXISTS idx_memory_domain ON memory_items(domain);
 CREATE INDEX IF NOT EXISTS idx_tool_runs_session ON tool_runs(session_id);
+CREATE INDEX IF NOT EXISTS idx_tool_runs_run ON tool_runs(run_id);

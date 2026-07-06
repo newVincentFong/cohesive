@@ -4,9 +4,53 @@ use std::sync::Mutex;
 use rusqlite::{params, Connection};
 use tauri::{AppHandle, Manager};
 
+pub const SCHEMA_VERSION: i64 = 2;
+const SCHEMA_VERSION_KEY: &str = "schema_version";
+
 pub struct AppState {
     pub db: Mutex<Connection>,
     pub data_dir: PathBuf,
+}
+
+fn backup_database_path(db_path: &std::path::Path) -> PathBuf {
+    let timestamp = chrono::Utc::now().format("%Y%m%d%H%M%S");
+    let file_name = db_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("cohesive.db");
+    db_path.with_file_name(format!("{file_name}.backup-{timestamp}"))
+}
+
+fn read_schema_version(connection: &Connection) -> Option<i64> {
+    connection
+        .query_row(
+            "SELECT value FROM app_settings WHERE key = ?1",
+            params![SCHEMA_VERSION_KEY],
+            |row| row.get::<_, String>(0),
+        )
+        .ok()
+        .and_then(|value| value.parse().ok())
+}
+
+fn ensure_schema(connection: &Connection) -> Result<(), String> {
+    let current_version = read_schema_version(connection);
+    if current_version == Some(SCHEMA_VERSION) {
+        return Ok(());
+    }
+
+    connection
+        .execute_batch(include_str!("schema.sql"))
+        .map_err(|err| err.to_string())?;
+
+    connection
+        .execute(
+            "INSERT INTO app_settings (key, value) VALUES (?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            params![SCHEMA_VERSION_KEY, SCHEMA_VERSION.to_string()],
+        )
+        .map_err(|err| err.to_string())?;
+
+    Ok(())
 }
 
 pub fn init_database(app: &AppHandle) -> Result<AppState, String> {
@@ -21,10 +65,20 @@ pub fn init_database(app: &AppHandle) -> Result<AppState, String> {
     std::fs::create_dir_all(data_dir.join("mind/exports")).map_err(|err| err.to_string())?;
 
     let db_path = data_dir.join("cohesive.db");
+    let needs_reset = if db_path.exists() {
+        let probe = Connection::open(&db_path).map_err(|err| err.to_string())?;
+        read_schema_version(&probe) != Some(SCHEMA_VERSION)
+    } else {
+        false
+    };
+
+    if needs_reset {
+        let backup_path = backup_database_path(&db_path);
+        std::fs::rename(&db_path, backup_path).map_err(|err| err.to_string())?;
+    }
+
     let connection = Connection::open(db_path).map_err(|err| err.to_string())?;
-    connection
-        .execute_batch(include_str!("schema.sql"))
-        .map_err(|err| err.to_string())?;
+    ensure_schema(&connection)?;
 
     Ok(AppState {
         db: Mutex::new(connection),

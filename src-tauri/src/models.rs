@@ -7,7 +7,8 @@ pub struct Session {
     pub domain: String,
     pub title: String,
     pub status: String,
-    pub mode: Option<String>,
+    pub default_mode: Option<String>,
+    pub current_leaf_message_id: Option<String>,
     pub project_id: Option<String>,
     pub document_id: Option<String>,
     pub memory_scope_id: String,
@@ -22,7 +23,7 @@ pub struct Session {
 pub struct CreateSessionInput {
     pub domain: String,
     pub title: Option<String>,
-    pub mode: Option<String>,
+    pub default_mode: Option<String>,
     pub project_id: Option<String>,
     pub document_id: Option<String>,
 }
@@ -32,7 +33,8 @@ pub struct CreateSessionInput {
 pub struct UpdateSessionInput {
     pub title: Option<String>,
     pub status: Option<String>,
-    pub mode: Option<String>,
+    pub default_mode: Option<String>,
+    pub current_leaf_message_id: Option<String>,
     pub project_id: Option<String>,
     pub document_id: Option<String>,
     pub summary: Option<String>,
@@ -43,6 +45,8 @@ pub struct UpdateSessionInput {
 pub struct Message {
     pub id: String,
     pub session_id: String,
+    pub parent_message_id: Option<String>,
+    pub agent_run_id: Option<String>,
     pub role: String,
     pub content: String,
     pub tool_name: Option<String>,
@@ -54,10 +58,47 @@ pub struct Message {
 #[serde(rename_all = "camelCase")]
 pub struct CreateMessageInput {
     pub session_id: String,
+    pub parent_message_id: Option<String>,
+    pub agent_run_id: Option<String>,
     pub role: String,
     pub content: String,
     pub tool_name: Option<String>,
     pub tool_payload: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentRun {
+    pub id: String,
+    pub session_id: String,
+    pub parent_message_id: Option<String>,
+    pub user_message_id: String,
+    pub assistant_message_id: Option<String>,
+    pub mode: String,
+    pub status: String,
+    pub toolset_snapshot_json: Option<String>,
+    pub permission_snapshot_json: Option<String>,
+    pub created_at: String,
+    pub finished_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateAgentRunInput {
+    pub session_id: String,
+    pub parent_message_id: Option<String>,
+    pub user_message_id: String,
+    pub mode: String,
+    pub toolset_snapshot_json: Option<String>,
+    pub permission_snapshot_json: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateAgentRunInput {
+    pub assistant_message_id: Option<String>,
+    pub status: Option<String>,
+    pub finished_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -93,6 +134,8 @@ pub struct CreateWritingDocumentInput {
 pub struct ToolRun {
     pub id: String,
     pub session_id: String,
+    pub run_id: Option<String>,
+    pub message_id: Option<String>,
     pub kind: String,
     pub command: Option<String>,
     pub cwd: Option<String>,
@@ -254,6 +297,8 @@ pub struct ShellRunRequest {
     pub command: String,
     pub cwd: Option<String>,
     pub confirmed: Option<bool>,
+    pub run_id: Option<String>,
+    pub message_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -270,6 +315,8 @@ pub struct FileReadRequest {
     pub project_path: String,
     pub mode: String,
     pub relative_path: String,
+    pub run_id: Option<String>,
+    pub message_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -281,6 +328,8 @@ pub struct FileWriteRequest {
     pub relative_path: String,
     pub content: String,
     pub confirmed: Option<bool>,
+    pub run_id: Option<String>,
+    pub message_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

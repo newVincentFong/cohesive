@@ -48,8 +48,9 @@ function createReadFileTool(onRead?: (trace: ToolTrace) => Promise<void>): Agent
         const rawContent = await readProjectFile({
           sessionId: ctx.session.id,
           projectPath: ctx.project.path,
-          mode: "explore",
+          mode: ctx.runMode,
           relativePath: relativePath.trim(),
+          runId: ctx.runId,
         });
         const lineCount = countLines(rawContent);
         const displaySummary = summarizeForDisplay(rawContent, 500);

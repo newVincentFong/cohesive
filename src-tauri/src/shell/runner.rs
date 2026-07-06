@@ -36,6 +36,8 @@ pub async fn run_shell(
     let mut tool_run = ToolRun {
         id: Uuid::new_v4().to_string(),
         session_id: request.session_id,
+        run_id: request.run_id,
+        message_id: request.message_id,
         kind: "shell".to_string(),
         command: Some(request.command.clone()),
         cwd: Some(canonical_cwd.to_string_lossy().to_string()),

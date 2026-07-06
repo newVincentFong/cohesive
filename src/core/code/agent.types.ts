@@ -11,6 +11,8 @@ export interface CodeProject {
 export interface ToolRun {
   id: string;
   sessionId: string;
+  runId?: string;
+  messageId?: string;
   kind: "shell" | "read_file" | "write_file" | "list_dir";
   command?: string;
   cwd?: string;
@@ -31,6 +33,8 @@ export interface ShellRunRequest {
   command: string;
   cwd?: string;
   confirmed?: boolean;
+  runId?: string;
+  messageId?: string;
 }
 
 export interface ShellRunResult {
@@ -43,6 +47,8 @@ export interface FileReadRequest {
   projectPath: string;
   mode: CodeMode;
   relativePath: string;
+  runId?: string;
+  messageId?: string;
 }
 
 export interface FileWriteRequest {
@@ -52,6 +58,8 @@ export interface FileWriteRequest {
   relativePath: string;
   content: string;
   confirmed?: boolean;
+  runId?: string;
+  messageId?: string;
 }
 
 export interface AgentPermissionMatrix {

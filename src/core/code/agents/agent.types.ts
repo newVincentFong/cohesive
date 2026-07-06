@@ -1,4 +1,4 @@
-import type { Session } from "@/core/session/session.types";
+import type { Session, CodeMode } from "@/core/session/session.types";
 import type { CodeProject } from "@/core/code/agent.types";
 
 export interface ExploreTask {
@@ -20,6 +20,8 @@ export interface AgentProgress {
 export interface AgentContext {
   session: Session;
   project: CodeProject;
+  runId: string;
+  runMode: CodeMode;
   onProgress?: (update: AgentProgress) => Promise<void>;
 }
 

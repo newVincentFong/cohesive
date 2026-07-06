@@ -1,14 +1,14 @@
-use std::path::{Component, Path, PathBuf};
+use std::path::{Component, PathBuf};
 
 use rusqlite::{params, Connection};
 use uuid::Uuid;
 
 use crate::db::{now_iso, parse_metadata, with_db, AppState};
 use crate::models::{
-    AddMemoryInput, CodeProject, CreateMessageInput, CreateSessionInput, CreateWritingDocumentInput,
-    FileReadRequest, FileWriteRequest, MemoryItem, MemoryQuery, MemoryScope, Message, Session,
-    ShellRunRequest, ShellRunResult, ToolRun, UpdateMemoryInput, UpdateSessionInput,
-    WritingDocument,
+    AddMemoryInput, AgentRun, CodeProject, CreateAgentRunInput, CreateMessageInput,
+    CreateSessionInput, CreateWritingDocumentInput, FileReadRequest, FileWriteRequest, MemoryItem,
+    MemoryQuery, MemoryScope, Message, Session, ShellRunRequest, ShellRunResult, ToolRun,
+    UpdateAgentRunInput, UpdateMemoryInput, UpdateSessionInput, WritingDocument,
 };
 use crate::shell::runner;
 
@@ -30,20 +30,26 @@ fn derive_session_title(first_user_message: &str) -> String {
     format!("{truncated}…")
 }
 
+const SESSION_SELECT: &str = "SELECT id, domain, title, status, default_mode, current_leaf_message_id, project_id, document_id, memory_scope_id, summary, created_at, updated_at, last_opened_at FROM sessions";
+const MESSAGE_SELECT: &str = "SELECT id, session_id, parent_message_id, agent_run_id, role, content, tool_name, tool_payload, created_at FROM messages";
+const AGENT_RUN_SELECT: &str = "SELECT id, session_id, parent_message_id, user_message_id, assistant_message_id, mode, status, toolset_snapshot_json, permission_snapshot_json, created_at, finished_at FROM agent_runs";
+const TOOL_RUN_SELECT: &str = "SELECT id, session_id, run_id, message_id, kind, command, cwd, target_path, status, exit_code, stdout_tail, stderr_tail, requires_confirmation, started_at, finished_at FROM tool_runs";
+
 fn map_session(row: &rusqlite::Row<'_>) -> rusqlite::Result<Session> {
     Ok(Session {
         id: row.get(0)?,
         domain: row.get(1)?,
         title: row.get(2)?,
         status: row.get(3)?,
-        mode: row.get(4)?,
-        project_id: row.get(5)?,
-        document_id: row.get(6)?,
-        memory_scope_id: row.get(7)?,
-        summary: row.get(8)?,
-        created_at: row.get(9)?,
-        updated_at: row.get(10)?,
-        last_opened_at: row.get(11)?,
+        default_mode: row.get(4)?,
+        current_leaf_message_id: row.get(5)?,
+        project_id: row.get(6)?,
+        document_id: row.get(7)?,
+        memory_scope_id: row.get(8)?,
+        summary: row.get(9)?,
+        created_at: row.get(10)?,
+        updated_at: row.get(11)?,
+        last_opened_at: row.get(12)?,
     })
 }
 
@@ -51,11 +57,29 @@ fn map_message(row: &rusqlite::Row<'_>) -> rusqlite::Result<Message> {
     Ok(Message {
         id: row.get(0)?,
         session_id: row.get(1)?,
-        role: row.get(2)?,
-        content: row.get(3)?,
-        tool_name: row.get(4)?,
-        tool_payload: row.get(5)?,
-        created_at: row.get(6)?,
+        parent_message_id: row.get(2)?,
+        agent_run_id: row.get(3)?,
+        role: row.get(4)?,
+        content: row.get(5)?,
+        tool_name: row.get(6)?,
+        tool_payload: row.get(7)?,
+        created_at: row.get(8)?,
+    })
+}
+
+fn map_agent_run(row: &rusqlite::Row<'_>) -> rusqlite::Result<AgentRun> {
+    Ok(AgentRun {
+        id: row.get(0)?,
+        session_id: row.get(1)?,
+        parent_message_id: row.get(2)?,
+        user_message_id: row.get(3)?,
+        assistant_message_id: row.get(4)?,
+        mode: row.get(5)?,
+        status: row.get(6)?,
+        toolset_snapshot_json: row.get(7)?,
+        permission_snapshot_json: row.get(8)?,
+        created_at: row.get(9)?,
+        finished_at: row.get(10)?,
     })
 }
 
@@ -76,17 +100,19 @@ fn map_tool_run(row: &rusqlite::Row<'_>) -> rusqlite::Result<ToolRun> {
     Ok(ToolRun {
         id: row.get(0)?,
         session_id: row.get(1)?,
-        kind: row.get(2)?,
-        command: row.get(3)?,
-        cwd: row.get(4)?,
-        target_path: row.get(5)?,
-        status: row.get(6)?,
-        exit_code: row.get(7)?,
-        stdout_tail: row.get(8)?,
-        stderr_tail: row.get(9)?,
-        requires_confirmation: row.get::<_, i64>(10)? != 0,
-        started_at: row.get(11)?,
-        finished_at: row.get(12)?,
+        run_id: row.get(2)?,
+        message_id: row.get(3)?,
+        kind: row.get(4)?,
+        command: row.get(5)?,
+        cwd: row.get(6)?,
+        target_path: row.get(7)?,
+        status: row.get(8)?,
+        exit_code: row.get(9)?,
+        stdout_tail: row.get(10)?,
+        stderr_tail: row.get(11)?,
+        requires_confirmation: row.get::<_, i64>(12)? != 0,
+        started_at: row.get(13)?,
+        finished_at: row.get(14)?,
     })
 }
 
@@ -103,10 +129,18 @@ fn map_writing_document(row: &rusqlite::Row<'_>) -> rusqlite::Result<WritingDocu
 
 fn fetch_session(db: &Connection, id: &str) -> Result<Session, String> {
     db.query_row(
-        "SELECT id, domain, title, status, mode, project_id, document_id, memory_scope_id, summary, created_at, updated_at, last_opened_at
-         FROM sessions WHERE id = ?1",
+        &format!("{SESSION_SELECT} WHERE id = ?1"),
         params![id],
         map_session,
+    )
+    .map_err(|err| err.to_string())
+}
+
+fn fetch_agent_run(db: &Connection, id: &str) -> Result<AgentRun, String> {
+    db.query_row(
+        &format!("{AGENT_RUN_SELECT} WHERE id = ?1"),
+        params![id],
+        map_agent_run,
     )
     .map_err(|err| err.to_string())
 }
@@ -136,13 +170,13 @@ pub fn session_create(
 
     with_db(&state, |db| {
         db.execute(
-            "INSERT INTO sessions (id, domain, title, status, mode, project_id, document_id, memory_scope_id, created_at, updated_at, last_opened_at)
+            "INSERT INTO sessions (id, domain, title, status, default_mode, project_id, document_id, memory_scope_id, created_at, updated_at, last_opened_at)
              VALUES (?1, ?2, ?3, 'active', ?4, ?5, ?6, ?7, ?8, ?9, ?8)",
             params![
                 id,
                 input.domain,
                 title,
-                input.mode,
+                input.default_mode,
                 input.project_id,
                 input.document_id,
                 memory_scope_id,
@@ -160,8 +194,7 @@ pub fn session_list(state: tauri::State<'_, AppState>, domain: String) -> Result
     with_db(&state, |db| {
         let mut stmt = db
             .prepare(
-                "SELECT id, domain, title, status, mode, project_id, document_id, memory_scope_id, summary, created_at, updated_at, last_opened_at
-                 FROM sessions WHERE domain = ?1 AND status != 'deleted' ORDER BY COALESCE(last_opened_at, updated_at) DESC",
+                &format!("{SESSION_SELECT} WHERE domain = ?1 AND status != 'deleted' ORDER BY COALESCE(last_opened_at, updated_at) DESC"),
             )
             .map_err(|err| err.to_string())?;
         let rows = stmt
@@ -187,11 +220,14 @@ pub fn session_update(
     with_db(&state, |db| {
         let current = fetch_session(db, &id)?;
         db.execute(
-            "UPDATE sessions SET title = ?1, status = ?2, mode = ?3, project_id = ?4, document_id = ?5, summary = ?6, updated_at = ?7 WHERE id = ?8",
+            "UPDATE sessions SET title = ?1, status = ?2, default_mode = ?3, current_leaf_message_id = ?4, project_id = ?5, document_id = ?6, summary = ?7, updated_at = ?8 WHERE id = ?9",
             params![
                 patch.title.unwrap_or(current.title),
                 patch.status.unwrap_or(current.status),
-                patch.mode.or(current.mode),
+                patch.default_mode.or(current.default_mode),
+                patch
+                    .current_leaf_message_id
+                    .or(current.current_leaf_message_id),
                 patch.project_id.or(current.project_id),
                 patch.document_id.or(current.document_id),
                 patch.summary.or(current.summary),
@@ -238,11 +274,13 @@ pub fn message_create(
     let now = now_iso();
     with_db(&state, |db| {
         db.execute(
-            "INSERT INTO messages (id, session_id, role, content, tool_name, tool_payload, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT INTO messages (id, session_id, parent_message_id, agent_run_id, role, content, tool_name, tool_payload, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             params![
                 id,
                 input.session_id,
+                input.parent_message_id,
+                input.agent_run_id,
                 input.role,
                 input.content,
                 input.tool_name,
@@ -253,13 +291,13 @@ pub fn message_create(
         .map_err(|err| err.to_string())?;
 
         db.execute(
-            "UPDATE sessions SET updated_at = ?1 WHERE id = ?2",
-            params![now, input.session_id],
+            "UPDATE sessions SET current_leaf_message_id = ?1, updated_at = ?2 WHERE id = ?3",
+            params![id, now, input.session_id],
         )
         .map_err(|err| err.to_string())?;
 
         db.query_row(
-            "SELECT id, session_id, role, content, tool_name, tool_payload, created_at FROM messages WHERE id = ?1",
+            &format!("{MESSAGE_SELECT} WHERE id = ?1"),
             params![id],
             map_message,
         )
@@ -275,12 +313,158 @@ pub fn message_list(
     with_db(&state, |db| {
         let mut stmt = db
             .prepare(
-                "SELECT id, session_id, role, content, tool_name, tool_payload, created_at
-                 FROM messages WHERE session_id = ?1 ORDER BY created_at ASC",
+                &format!("{MESSAGE_SELECT} WHERE session_id = ?1 ORDER BY created_at ASC"),
             )
             .map_err(|err| err.to_string())?;
         let rows = stmt
             .query_map(params![session_id], map_message)
+            .map_err(|err| err.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|err| err.to_string())
+    })
+}
+
+#[tauri::command]
+pub fn message_list_path(
+    state: tauri::State<'_, AppState>,
+    session_id: String,
+    leaf_message_id: Option<String>,
+) -> Result<Vec<Message>, String> {
+    with_db(&state, |db| {
+        let leaf_id = match leaf_message_id {
+            Some(id) => id,
+            None => {
+                let session = fetch_session(db, &session_id)?;
+                match session.current_leaf_message_id {
+                    Some(id) => id,
+                    None => return Ok(Vec::new()),
+                }
+            }
+        };
+
+        let mut stmt = db
+            .prepare(
+                "WITH RECURSIVE path AS (
+                    SELECT id, session_id, parent_message_id, agent_run_id, role, content, tool_name, tool_payload, created_at
+                    FROM messages
+                    WHERE id = ?1
+                    UNION ALL
+                    SELECT m.id, m.session_id, m.parent_message_id, m.agent_run_id, m.role, m.content, m.tool_name, m.tool_payload, m.created_at
+                    FROM messages m
+                    JOIN path p ON m.id = p.parent_message_id
+                )
+                SELECT id, session_id, parent_message_id, agent_run_id, role, content, tool_name, tool_payload, created_at
+                FROM path
+                ORDER BY created_at ASC",
+            )
+            .map_err(|err| err.to_string())?;
+
+        let rows = stmt
+            .query_map(params![leaf_id], map_message)
+            .map_err(|err| err.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|err| err.to_string())
+    })
+}
+
+#[tauri::command]
+pub fn message_list_children(
+    state: tauri::State<'_, AppState>,
+    parent_message_id: String,
+) -> Result<Vec<Message>, String> {
+    with_db(&state, |db| {
+        let mut stmt = db
+            .prepare(
+                &format!("{MESSAGE_SELECT} WHERE parent_message_id = ?1 ORDER BY created_at ASC"),
+            )
+            .map_err(|err| err.to_string())?;
+        let rows = stmt
+            .query_map(params![parent_message_id], map_message)
+            .map_err(|err| err.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|err| err.to_string())
+    })
+}
+
+#[tauri::command]
+pub fn agent_run_create(
+    state: tauri::State<'_, AppState>,
+    input: CreateAgentRunInput,
+) -> Result<AgentRun, String> {
+    let id = Uuid::new_v4().to_string();
+    let now = now_iso();
+    with_db(&state, |db| {
+        db.execute(
+            "INSERT INTO agent_runs (id, session_id, parent_message_id, user_message_id, mode, status, toolset_snapshot_json, permission_snapshot_json, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, 'running', ?6, ?7, ?8)",
+            params![
+                id,
+                input.session_id,
+                input.parent_message_id,
+                input.user_message_id,
+                input.mode,
+                input.toolset_snapshot_json,
+                input.permission_snapshot_json,
+                now
+            ],
+        )
+        .map_err(|err| err.to_string())?;
+        fetch_agent_run(db, &id)
+    })
+}
+
+#[tauri::command]
+pub fn agent_run_update(
+    state: tauri::State<'_, AppState>,
+    id: String,
+    patch: UpdateAgentRunInput,
+) -> Result<AgentRun, String> {
+    with_db(&state, |db| {
+        let current = fetch_agent_run(db, &id)?;
+        let finished_at = patch
+            .finished_at
+            .or(current.finished_at)
+            .or_else(|| {
+                if patch.status.as_deref() == Some("done") || patch.status.as_deref() == Some("error")
+                {
+                    Some(now_iso())
+                } else {
+                    None
+                }
+            });
+
+        db.execute(
+            "UPDATE agent_runs SET assistant_message_id = ?1, status = ?2, finished_at = ?3 WHERE id = ?4",
+            params![
+                patch.assistant_message_id.or(current.assistant_message_id),
+                patch.status.unwrap_or(current.status),
+                finished_at,
+                id
+            ],
+        )
+        .map_err(|err| err.to_string())?;
+        fetch_agent_run(db, &id)
+    })
+}
+
+#[tauri::command]
+pub fn agent_run_get(state: tauri::State<'_, AppState>, id: String) -> Result<AgentRun, String> {
+    with_db(&state, |db| fetch_agent_run(db, &id))
+}
+
+#[tauri::command]
+pub fn agent_run_list(
+    state: tauri::State<'_, AppState>,
+    session_id: String,
+) -> Result<Vec<AgentRun>, String> {
+    with_db(&state, |db| {
+        let mut stmt = db
+            .prepare(
+                &format!("{AGENT_RUN_SELECT} WHERE session_id = ?1 ORDER BY created_at ASC"),
+            )
+            .map_err(|err| err.to_string())?;
+        let rows = stmt
+            .query_map(params![session_id], map_agent_run)
             .map_err(|err| err.to_string())?;
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(|err| err.to_string())
@@ -535,8 +719,7 @@ pub fn tool_run_list(
     with_db(&state, |db| {
         let mut stmt = db
             .prepare(
-                "SELECT id, session_id, kind, command, cwd, target_path, status, exit_code, stdout_tail, stderr_tail, requires_confirmation, started_at, finished_at
-                 FROM tool_runs WHERE session_id = ?1 ORDER BY started_at DESC",
+                &format!("{TOOL_RUN_SELECT} WHERE session_id = ?1 ORDER BY started_at DESC"),
             )
             .map_err(|err| err.to_string())?;
         let rows = stmt
@@ -572,11 +755,13 @@ pub fn resolve_project_path(project_root: &str, relative_path: &str) -> Result<P
 pub fn insert_tool_run(state: &AppState, tool_run: &ToolRun) -> Result<(), String> {
     with_db(state, |db| {
         db.execute(
-            "INSERT INTO tool_runs (id, session_id, kind, command, cwd, target_path, status, exit_code, stdout_tail, stderr_tail, requires_confirmation, started_at, finished_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+            "INSERT INTO tool_runs (id, session_id, run_id, message_id, kind, command, cwd, target_path, status, exit_code, stdout_tail, stderr_tail, requires_confirmation, started_at, finished_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
             params![
                 tool_run.id,
                 tool_run.session_id,
+                tool_run.run_id,
+                tool_run.message_id,
                 tool_run.kind,
                 tool_run.command,
                 tool_run.cwd,
@@ -626,6 +811,8 @@ pub fn project_read_file(
     let tool_run = ToolRun {
         id: Uuid::new_v4().to_string(),
         session_id: request.session_id,
+        run_id: request.run_id,
+        message_id: request.message_id,
         kind: "read_file".to_string(),
         command: None,
         cwd: Some(request.project_path.clone()),
@@ -657,6 +844,8 @@ pub fn project_write_file(
     let mut tool_run = ToolRun {
         id: Uuid::new_v4().to_string(),
         session_id: request.session_id,
+        run_id: request.run_id,
+        message_id: request.message_id,
         kind: "write_file".to_string(),
         command: None,
         cwd: Some(request.project_path.clone()),

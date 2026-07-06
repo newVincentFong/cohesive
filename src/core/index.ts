@@ -2,6 +2,8 @@ export * from "./session/session.types";
 export * from "./session/session.service";
 export * from "./message/message.types";
 export * from "./message/message.service";
+export * from "./agent-run/agent-run.types";
+export * from "./agent-run/agent-run.service";
 export * from "./memory/memory-store";
 export * from "./memory/memory-store.impl";
 export * from "./memory/memory-registry";

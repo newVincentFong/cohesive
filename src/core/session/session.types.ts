@@ -7,7 +7,8 @@ export interface Session {
   domain: Domain;
   title: string;
   status: SessionStatus;
-  mode?: CodeMode;
+  defaultMode?: CodeMode;
+  currentLeafMessageId?: string;
   projectId?: string;
   documentId?: string;
   memoryScopeId: string;
@@ -20,7 +21,7 @@ export interface Session {
 export interface CreateSessionInput {
   domain: Domain;
   title?: string;
-  mode?: CodeMode;
+  defaultMode?: CodeMode;
   projectId?: string;
   documentId?: string;
 }
@@ -28,7 +29,8 @@ export interface CreateSessionInput {
 export interface UpdateSessionInput {
   title?: string;
   status?: SessionStatus;
-  mode?: CodeMode;
+  defaultMode?: CodeMode;
+  currentLeafMessageId?: string;
   projectId?: string;
   documentId?: string;
   summary?: string;

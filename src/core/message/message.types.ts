@@ -3,6 +3,8 @@ export type MessageRole = "user" | "assistant" | "system" | "tool";
 export interface Message {
   id: string;
   sessionId: string;
+  parentMessageId?: string | null;
+  agentRunId?: string;
   role: MessageRole;
   content: string;
   toolName?: string;
@@ -12,6 +14,8 @@ export interface Message {
 
 export interface CreateMessageInput {
   sessionId: string;
+  parentMessageId?: string | null;
+  agentRunId?: string;
   role: MessageRole;
   content: string;
   toolName?: string;

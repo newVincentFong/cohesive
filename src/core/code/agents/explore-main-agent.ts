@@ -1,6 +1,6 @@
 import type { Message } from "@/core/message/message.types";
 import type { LlmMessage } from "@/core/llm/llm.types";
-import type { Session } from "@/core/session/session.types";
+import type { Session, CodeMode } from "@/core/session/session.types";
 import type { CodeProject } from "@/core/code/agent.types";
 import { agentToolsToLlmDefinitions, runAgentLoop, type AgentLoopMessageEvent, type AgentLoopMessageUpdateEvent } from "./agent-loop";
 import { getExploreSubAgentTools, runExploreSubAgent } from "./explore-subagent";
@@ -139,6 +139,8 @@ export async function runExploreAgent(input: {
   project: CodeProject;
   userMessage: string;
   history: Message[];
+  runId: string;
+  runMode: CodeMode;
   onProgress: (update: AgentProgress) => Promise<void>;
   onTrace?: AgentTraceCallbacks;
   onAnswerDelta?: (content: string) => void | Promise<void>;
@@ -146,6 +148,8 @@ export async function runExploreAgent(input: {
   const ctx: AgentContext = {
     session: input.session,
     project: input.project,
+    runId: input.runId,
+    runMode: input.runMode,
     onProgress: input.onProgress,
   };
 

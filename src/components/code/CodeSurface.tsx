@@ -1,11 +1,16 @@
 import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import type { CodeMode } from "@/core/session/session.types";
 import type { CodeProject } from "@/core/code/agent.types";
+import { permissionsForMode } from "@/core/code/agent.types";
 import { listCodeProjects, registerCodeProject } from "@/core/code/agent.service";
 import {
   createMessage,
-  listMessages,
+  listConversationPath,
 } from "@/core/message/message.service";
+import {
+  createAgentRun,
+  updateAgentRun,
+} from "@/core/agent-run/agent-run.service";
 import {
   createSession,
   listSessions,
@@ -97,7 +102,7 @@ export function CodeSidebar({ activeSessionId, onSelectSession }: CodeSurfacePro
     if (!selectedProjectId) return;
     const session = await createSession({
       domain: "code",
-      mode: "plan",
+      defaultMode: "plan",
       projectId: selectedProjectId,
       title: "New code session",
     });
@@ -144,7 +149,7 @@ export function CodeSidebar({ activeSessionId, onSelectSession }: CodeSurfacePro
           activeSessionId={activeSessionId}
           onSelectSession={onSelectSession}
           onSessionsChange={() => void refresh()}
-          renderSubtitle={(session) => session.mode ?? "plan"}
+          renderSubtitle={(session) => session.defaultMode ?? "plan"}
         />
       </div>
     </>
@@ -197,6 +202,7 @@ function createTraceCallbacks(
 export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | null }) {
   const [session, setSession] = useState<Session | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [composerMode, setComposerMode] = useState<CodeMode>("plan");
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [agentPhase, setAgentPhase] = useState<string | null>(null);
@@ -205,7 +211,11 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
   const [traceColumns, setTraceColumns] = useState<AgentTraceColumn[]>([]);
 
   async function refreshSessionData(nextSession: Session) {
-    setMessages(await listMessages(nextSession.id));
+    const path = await listConversationPath(
+      nextSession.id,
+      nextSession.currentLeafMessageId,
+    );
+    setMessages(path);
   }
 
   useEffect(() => {
@@ -213,6 +223,7 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
       setSession(null);
       setMessages([]);
       setTraceColumns([]);
+      setComposerMode("plan");
       return;
     }
 
@@ -221,6 +232,7 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
       const nextSession = sessions.find((item) => item.id === activeSessionId) ?? null;
       setSession(nextSession);
       if (nextSession) {
+        setComposerMode(nextSession.defaultMode ?? "plan");
         await touchSession(nextSession.id);
         await refreshSessionData(nextSession);
       }
@@ -229,40 +241,50 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
 
   async function handleModeChange(mode: CodeMode) {
     if (!session) return;
-    const updated = await updateSession(session.id, { mode });
+    setComposerMode(mode);
+    const updated = await updateSession(session.id, { defaultMode: mode });
     setSession(updated);
-  }
-
-  async function persistToolTrace(update: AgentProgress) {
-    if (!session || !update.toolTrace) return;
-    await createMessage({
-      sessionId: session.id,
-      role: "tool",
-      content: update.toolTrace.content,
-      toolName: update.toolTrace.toolName,
-      toolPayload: update.toolTrace.toolPayload,
-    });
-    setMessages(await listMessages(session.id));
   }
 
   async function handleSendMessage() {
     if (!session || !draft.trim() || busy) return;
 
     const content = draft.trim();
-    const isFirstMessage = messages.length === 0;
-    const isExploreMode = (session.mode ?? "plan") === "explore";
+    const parentId = session.currentLeafMessageId ?? null;
+    const isFirstMessage = parentId === null;
+    const isExploreMode = composerMode === "explore";
 
     setBusy(true);
     setError(null);
     setAgentPhase(null);
     setTraceColumns([]);
 
-    try {
-      await createMessage({
+    let pathTailId = parentId;
+    let agentRunId: string | null = null;
+
+    async function persistToolTrace(update: AgentProgress) {
+      if (!session || !update.toolTrace || !agentRunId) return;
+      const toolMessage = await createMessage({
         sessionId: session.id,
+        parentMessageId: pathTailId,
+        agentRunId,
+        role: "tool",
+        content: update.toolTrace.content,
+        toolName: update.toolTrace.toolName,
+        toolPayload: update.toolTrace.toolPayload,
+      });
+      pathTailId = toolMessage.id;
+      setMessages(await listConversationPath(session.id));
+    }
+
+    try {
+      const userMessage = await createMessage({
+        sessionId: session.id,
+        parentMessageId: parentId,
         role: "user",
         content,
       });
+      pathTailId = userMessage.id;
 
       if (isFirstMessage) {
         const updated = await updateSession(session.id, {
@@ -271,11 +293,24 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
         setSession(updated);
       }
 
+      const agentRun = await createAgentRun({
+        sessionId: session.id,
+        parentMessageId: parentId,
+        userMessageId: userMessage.id,
+        mode: composerMode,
+        permissionSnapshotJson: JSON.stringify(permissionsForMode(composerMode)),
+      });
+      agentRunId = agentRun.id;
+
       setDraft("");
-      const history = await listMessages(session.id);
-      setMessages(history);
+      const path = await listConversationPath(session.id);
+      setMessages(path);
+      setSession((prev) =>
+        prev ? { ...prev, currentLeafMessageId: userMessage.id } : prev,
+      );
 
       if (!isExploreMode) {
+        await updateAgentRun(agentRun.id, { status: "done" });
         return;
       }
 
@@ -289,7 +324,9 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
       }
 
       setAgentPhase("Exploring...");
-      const priorHistory = history.slice(0, -1);
+      const priorHistory = path
+        .filter((message) => message.role === "user" || message.role === "assistant")
+        .slice(0, -1);
       const onTrace = createTraceCallbacks(setTraceColumns);
       setMessages((prev) => upsertStreamingAssistant(prev, session.id, ""));
 
@@ -298,6 +335,8 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
         project,
         userMessage: content,
         history: priorHistory,
+        runId: agentRun.id,
+        runMode: composerMode,
         onProgress: async (update) => {
           if (update.phase === "reading") {
             setAgentPhase("Reading files...");
@@ -314,14 +353,27 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
         },
       });
 
-      await createMessage({
+      const assistantMessage = await createMessage({
         sessionId: session.id,
+        parentMessageId: userMessage.id,
+        agentRunId: agentRun.id,
         role: "assistant",
         content: answer,
       });
 
-      await refreshSessionData(session);
+      await updateAgentRun(agentRun.id, {
+        assistantMessageId: assistantMessage.id,
+        status: "done",
+      });
+
+      const sessions = await listSessions("code");
+      const refreshedSession = sessions.find((item) => item.id === session.id) ?? session;
+      setSession(refreshedSession);
+      await refreshSessionData(refreshedSession);
     } catch (err) {
+      if (agentRunId) {
+        await updateAgentRun(agentRunId, { status: "error" });
+      }
       setError(err instanceof Error ? err.message : "Failed to run explore agent");
     } finally {
       setBusy(false);
@@ -333,7 +385,7 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
     return <div className="empty-state">Pick a project and start a code session.</div>;
   }
 
-  const isExploreMode = (session.mode ?? "plan") === "explore";
+  const isExploreMode = composerMode === "explore";
 
   return (
     <>
@@ -344,7 +396,7 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
             {(["plan", "explore", "build"] as CodeMode[]).map((mode) => (
               <button
                 key={mode}
-                className={session.mode === mode ? "active" : undefined}
+                className={composerMode === mode ? "active" : undefined}
                 onClick={() => void handleModeChange(mode)}
               >
                 {mode}
