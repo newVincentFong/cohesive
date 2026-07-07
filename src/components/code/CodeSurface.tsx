@@ -392,17 +392,6 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
       <div className="panel-header">
         <strong>{session.title}</strong>
         <div className="panel-header-actions">
-          <div className="mode-switch">
-            {(["plan", "explore", "build"] as CodeMode[]).map((mode) => (
-              <button
-                key={mode}
-                className={composerMode === mode ? "active" : undefined}
-                onClick={() => void handleModeChange(mode)}
-              >
-                {mode}
-              </button>
-            ))}
-          </div>
           {isExploreMode ? (
             <button
               type="button"
@@ -438,27 +427,42 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
               ))}
             </div>
             <div className="chat-composer">
+              <div className="chat-composer-toolbar">
+                <div className="mode-switch">
+                  {(["plan", "explore", "build"] as CodeMode[]).map((mode) => (
+                    <button
+                      key={mode}
+                      className={composerMode === mode ? "active" : undefined}
+                      onClick={() => void handleModeChange(mode)}
+                    >
+                      {mode}
+                    </button>
+                  ))}
+                </div>
+              </div>
               {error ? (
                 <div className="settings-message settings-message--error">{error}</div>
               ) : null}
-              <textarea
-                className="textarea-input"
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-                placeholder={
-                  isExploreMode
-                    ? "Ask the coding agent to explore this codebase..."
-                    : "Switch to explore mode for agent chat"
-                }
-                disabled={busy}
-              />
-              <button
-                className="primary-button"
-                disabled={busy}
-                onClick={() => void handleSendMessage()}
-              >
-                {busy ? (agentPhase ?? "Working...") : "Send"}
-              </button>
+              <div className="chat-composer-row">
+                <textarea
+                  className="textarea-input"
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  placeholder={
+                    isExploreMode
+                      ? "Ask the coding agent to explore this codebase..."
+                      : "Switch to explore mode for agent chat"
+                  }
+                  disabled={busy}
+                />
+                <button
+                  className="primary-button"
+                  disabled={busy}
+                  onClick={() => void handleSendMessage()}
+                >
+                  {busy ? (agentPhase ?? "Working...") : "Send"}
+                </button>
+              </div>
             </div>
           </section>
           {traceExpanded ? (
