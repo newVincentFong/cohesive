@@ -9,8 +9,16 @@ import {
 } from "@/core/message/message.service";
 import {
   createAgentRun,
+  listAgentRuns,
   updateAgentRun,
 } from "@/core/agent-run/agent-run.service";
+import type { AgentRun } from "@/core/agent-run/agent-run.types";
+import {
+  createTracePersister,
+  getTraceByRun,
+  pruneTraces,
+  traceRunToColumns,
+} from "@/core/code/agents/agent-trace.service";
 import {
   createSession,
   listSessions,
@@ -31,6 +39,8 @@ import { AgentTracePanel } from "@/components/code/AgentTracePanel";
 import { MarkdownMessage } from "@/components/message/MarkdownMessage";
 import { STREAMING_MESSAGE_ID } from "@/core/message/streaming.constants";
 import { SessionSidebarList } from "@/components/session/SessionSidebarList";
+
+const TRACE_RETENTION_RUNS = 200;
 
 function upsertStreamingAssistant(
   messages: Message[],
@@ -163,7 +173,7 @@ function createTraceCallbacks(
     onColumnStart(column) {
       setTraceColumns((prev) => [
         ...prev,
-        { ...column, status: "running", messages: [] },
+        { ...column, status: "running", messages: [], startedAt: Date.now() },
       ]);
     },
     onColumnMessage(columnId, message) {
@@ -182,7 +192,9 @@ function createTraceCallbacks(
             ? {
                 ...column,
                 messages: column.messages.map((message) =>
-                  message.id === messageId ? { ...message, ...patch } : message,
+                  message.id === messageId
+                    ? { ...message, ...patch, updatedAt: Date.now() }
+                    : message,
                 ),
               }
             : column,
@@ -192,7 +204,9 @@ function createTraceCallbacks(
     onColumnEnd(columnId, status) {
       setTraceColumns((prev) =>
         prev.map((column) =>
-          column.id === columnId ? { ...column, status } : column,
+          column.id === columnId
+            ? { ...column, status, endedAt: Date.now() }
+            : column,
         ),
       );
     },
@@ -209,6 +223,8 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
   const [error, setError] = useState<string | null>(null);
   const [traceExpanded, setTraceExpanded] = useState(false);
   const [traceColumns, setTraceColumns] = useState<AgentTraceColumn[]>([]);
+  const [traceRuns, setTraceRuns] = useState<AgentRun[]>([]);
+  const [selectedTraceRunId, setSelectedTraceRunId] = useState<string | null>(null);
 
   async function refreshSessionData(nextSession: Session) {
     const path = await listConversationPath(
@@ -218,11 +234,25 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
     setMessages(path);
   }
 
+  async function refreshTraceRuns(sessionId: string): Promise<AgentRun[]> {
+    const runs = (await listAgentRuns(sessionId)).filter((run) => run.mode === "explore");
+    setTraceRuns(runs);
+    return runs;
+  }
+
+  async function loadPersistedTrace(runId: string) {
+    setSelectedTraceRunId(runId);
+    const trace = await getTraceByRun(runId);
+    setTraceColumns(traceRunToColumns(trace));
+  }
+
   useEffect(() => {
     if (!activeSessionId) {
       setSession(null);
       setMessages([]);
       setTraceColumns([]);
+      setTraceRuns([]);
+      setSelectedTraceRunId(null);
       setComposerMode("plan");
       return;
     }
@@ -231,10 +261,19 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
       const sessions = await listSessions("code");
       const nextSession = sessions.find((item) => item.id === activeSessionId) ?? null;
       setSession(nextSession);
+      setTraceColumns([]);
+      setSelectedTraceRunId(null);
       if (nextSession) {
         setComposerMode(nextSession.defaultMode ?? "plan");
         await touchSession(nextSession.id);
         await refreshSessionData(nextSession);
+        const runs = await refreshTraceRuns(nextSession.id);
+        const latest = runs[runs.length - 1];
+        if (latest) {
+          await loadPersistedTrace(latest.id);
+        }
+      } else {
+        setTraceRuns([]);
       }
     })();
   }, [activeSessionId]);
@@ -327,31 +366,43 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
       const priorHistory = path
         .filter((message) => message.role === "user" || message.role === "assistant")
         .slice(0, -1);
-      const onTrace = createTraceCallbacks(setTraceColumns);
+      setSelectedTraceRunId(agentRun.id);
+      const tracePersister = createTracePersister({
+        runId: agentRun.id,
+        sessionId: session.id,
+        ui: createTraceCallbacks(setTraceColumns),
+      });
       setMessages((prev) => upsertStreamingAssistant(prev, session.id, ""));
 
-      const answer = await runExploreAgent({
-        session,
-        project,
-        userMessage: content,
-        history: priorHistory,
-        runId: agentRun.id,
-        runMode: composerMode,
-        onProgress: async (update) => {
-          if (update.phase === "reading") {
-            setAgentPhase("Reading files...");
-          } else if (update.phase === "delegating") {
-            setAgentPhase("Delegating exploration...");
-          } else {
-            setAgentPhase("Thinking...");
-          }
-          await persistToolTrace(update);
-        },
-        onTrace,
-        onAnswerDelta: (streamingContent) => {
-          setMessages((prev) => upsertStreamingAssistant(prev, session.id, streamingContent));
-        },
-      });
+      let answer: string;
+      try {
+        answer = await runExploreAgent({
+          session,
+          project,
+          userMessage: content,
+          history: priorHistory,
+          runId: agentRun.id,
+          runMode: composerMode,
+          onProgress: async (update) => {
+            if (update.phase === "reading") {
+              setAgentPhase("Reading files...");
+            } else if (update.phase === "delegating") {
+              setAgentPhase("Delegating exploration...");
+            } else {
+              setAgentPhase("Thinking...");
+            }
+            await persistToolTrace(update);
+          },
+          onTrace: tracePersister.callbacks,
+          onAnswerDelta: (streamingContent) => {
+            setMessages((prev) => upsertStreamingAssistant(prev, session.id, streamingContent));
+          },
+        });
+      } finally {
+        await tracePersister.finish();
+        await refreshTraceRuns(session.id);
+        void pruneTraces(TRACE_RETENTION_RUNS);
+      }
 
       const assistantMessage = await createMessage({
         sessionId: session.id,
@@ -467,7 +518,15 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
           </section>
           {traceExpanded ? (
             <section className="panel-section">
-              <AgentTracePanel columns={traceColumns} />
+              <AgentTracePanel
+                columns={traceColumns}
+                runs={traceRuns}
+                selectedRunId={selectedTraceRunId}
+                onSelectRun={(runId) => {
+                  if (!busy) void loadPersistedTrace(runId);
+                }}
+                liveRunId={busy ? selectedTraceRunId : null}
+              />
             </section>
           ) : null}
         </div>

@@ -103,6 +103,74 @@ pub struct UpdateAgentRunInput {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct TraceColumn {
+    pub id: String,
+    pub run_id: String,
+    pub session_id: String,
+    pub kind: String,
+    pub label: String,
+    pub status: String,
+    pub parent_column_id: Option<String>,
+    pub tools_json: Option<String>,
+    pub started_at: String,
+    pub ended_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpsertTraceColumnInput {
+    pub id: String,
+    pub run_id: String,
+    pub session_id: String,
+    pub kind: String,
+    pub label: String,
+    pub status: String,
+    pub parent_column_id: Option<String>,
+    pub tools_json: Option<String>,
+    pub started_at: String,
+    pub ended_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TraceMessage {
+    pub id: String,
+    pub run_id: String,
+    pub column_id: String,
+    pub iteration: i64,
+    pub idx: i64,
+    pub role: String,
+    pub content: Option<String>,
+    pub tool_calls_json: Option<String>,
+    pub tool_call_id: Option<String>,
+    pub created_at: String,
+    pub updated_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpsertTraceMessageInput {
+    pub id: String,
+    pub run_id: String,
+    pub column_id: String,
+    pub iteration: i64,
+    pub idx: i64,
+    pub role: String,
+    pub content: Option<String>,
+    pub tool_calls_json: Option<String>,
+    pub tool_call_id: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TraceRun {
+    pub columns: Vec<TraceColumn>,
+    pub messages: Vec<TraceMessage>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CodeProject {
     pub id: String,
     pub path: String,

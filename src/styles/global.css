@@ -853,6 +853,239 @@ a {
   padding: var(--space-md);
 }
 
+.agent-trace-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-sm);
+}
+
+.agent-trace-panel-header .section-title {
+  margin: 0;
+}
+
+.agent-trace-panel-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.agent-trace-run-select {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  font-size: 11px;
+  padding: 3px var(--space-md);
+  max-width: 220px;
+}
+
+.agent-trace-view-switch {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.agent-trace-view-switch button {
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 999px;
+  padding: 2px var(--space-md);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.agent-trace-view-switch button.active {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+/* Span tree (waterfall timeline) */
+
+.span-tree {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  gap: var(--space-sm);
+}
+
+.span-tree-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-xs) var(--space-sm);
+  font-size: 11px;
+}
+
+.span-tree-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--text-muted);
+}
+
+.span-tree-total {
+  font-size: 11px;
+}
+
+.span-tree-rows {
+  overflow-y: auto;
+  min-height: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+}
+
+.span-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 34%) 1fr 56px;
+  align-items: center;
+  gap: var(--space-md);
+  padding: 3px var(--space-md);
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.span-row:last-child {
+  border-bottom: none;
+}
+
+.span-row:hover {
+  background: var(--bg-elevated);
+}
+
+.span-row--selected {
+  background: var(--accent-soft);
+}
+
+.span-row-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+.span-row-caret {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 10px;
+  width: 14px;
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.span-row-caret--placeholder {
+  display: inline-block;
+}
+
+.span-row-name {
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.span-kind-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+.span-kind-dot--agent {
+  background: var(--accent);
+}
+
+.span-kind-dot--llm {
+  background: #61afef;
+}
+
+.span-kind-dot--tool {
+  background: #d19a66;
+}
+
+.span-row-track {
+  position: relative;
+  height: 14px;
+  background: var(--bg-primary);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.span-bar {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  border-radius: 3px;
+  min-width: 2px;
+}
+
+.span-bar--agent {
+  background: var(--accent);
+  opacity: 0.55;
+}
+
+.span-bar--llm {
+  background: #61afef;
+}
+
+.span-bar--tool {
+  background: #d19a66;
+}
+
+.span-bar--error {
+  background: var(--danger);
+}
+
+.span-bar--running {
+  animation: trace-pulse 1.2s ease-in-out infinite;
+}
+
+.span-row-duration {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: var(--font-mono, monospace);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.span-detail {
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  padding: var(--space-md);
+  max-height: 220px;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.span-detail-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  font-size: 12px;
+  margin-bottom: var(--space-sm);
+}
+
+.span-detail-body {
+  margin: 0;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-primary);
+}
+
+.span-detail-empty {
+  font-size: 11px;
+}
+
 .agent-loop-message {
   padding: var(--space-sm);
   border-radius: 6px;

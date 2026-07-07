@@ -7,6 +7,9 @@ export interface AgentTraceColumn {
   status: "running" | "done" | "error";
   tools: LlmToolDefinition[];
   messages: TracedMessage[];
+  /** Epoch ms. Used by the span timeline; absent on legacy in-memory columns. */
+  startedAt?: number;
+  endedAt?: number;
 }
 
 export interface TracedMessage {
@@ -18,6 +21,8 @@ export interface TracedMessage {
   toolCalls?: LlmToolCall[];
   toolCallId?: string;
   timestamp: number;
+  /** Epoch ms of the last streaming patch; marks the end of an LLM call span. */
+  updatedAt?: number;
 }
 
 export interface AgentTraceCallbacks {

@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import type { AgentTraceColumn } from "@/core/code/agents/agent-trace.types";
 import type { LlmToolDefinition } from "@/core/llm/llm.types";
+import type { AgentRun } from "@/core/agent-run/agent-run.types";
 import { AgentLoopMessage } from "./AgentLoopMessage";
+import { AgentSpanTree } from "./AgentSpanTree";
 
 function ColumnStatusBadge({ status }: { status: AgentTraceColumn["status"] }) {
   return <span className={`agent-trace-status agent-trace-status--${status}`}>{status}</span>;
@@ -77,24 +79,89 @@ function AgentTraceColumnView({ column }: { column: AgentTraceColumn }) {
   );
 }
 
-export function AgentTracePanel({ columns }: { columns: AgentTraceColumn[] }) {
+type TraceView = "messages" | "spans";
+
+function formatRunOption(run: AgentRun, index: number): string {
+  const time = new Date(run.createdAt).toLocaleString();
+  const status = run.status === "done" ? "" : ` · ${run.status}`;
+  return `#${index + 1} · ${time}${status}`;
+}
+
+export interface AgentTracePanelProps {
+  columns: AgentTraceColumn[];
+  runs?: AgentRun[];
+  selectedRunId?: string | null;
+  onSelectRun?: (runId: string) => void;
+  liveRunId?: string | null;
+}
+
+export function AgentTracePanel({
+  columns,
+  runs = [],
+  selectedRunId = null,
+  onSelectRun,
+  liveRunId = null,
+}: AgentTracePanelProps) {
+  const [view, setView] = useState<TraceView>("messages");
+
+  const header = (
+    <div className="agent-trace-panel-header">
+      <h3 className="section-title">Agent trace</h3>
+      <div className="agent-trace-panel-controls">
+        {runs.length > 0 && onSelectRun ? (
+          <select
+            className="agent-trace-run-select"
+            value={selectedRunId ?? ""}
+            onChange={(event) => onSelectRun(event.target.value)}
+          >
+            {runs.map((run, index) => (
+              <option key={run.id} value={run.id}>
+                {run.id === liveRunId
+                  ? `${formatRunOption(run, index)} · live`
+                  : formatRunOption(run, index)}
+              </option>
+            ))}
+          </select>
+        ) : null}
+        <div className="agent-trace-view-switch">
+          {(["messages", "spans"] as TraceView[]).map((item) => (
+            <button
+              key={item}
+              type="button"
+              className={view === item ? "active" : undefined}
+              onClick={() => setView(item)}
+            >
+              {item === "messages" ? "Messages" : "Spans"}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
   if (columns.length === 0) {
     return (
       <div className="agent-trace-panel">
-        <h3 className="section-title">Agent trace</h3>
-        <div className="muted agent-trace-empty">Send a message in explore mode to start tracing.</div>
+        {header}
+        <div className="muted agent-trace-empty">
+          Send a message in explore mode to start tracing.
+        </div>
       </div>
     );
   }
 
   return (
     <div className="agent-trace-panel">
-      <h3 className="section-title">Agent trace</h3>
-      <div className="agent-trace-columns">
-        {columns.map((column) => (
-          <AgentTraceColumnView key={column.id} column={column} />
-        ))}
-      </div>
+      {header}
+      {view === "messages" ? (
+        <div className="agent-trace-columns">
+          {columns.map((column) => (
+            <AgentTraceColumnView key={column.id} column={column} />
+          ))}
+        </div>
+      ) : (
+        <AgentSpanTree columns={columns} />
+      )}
     </div>
   );
 }

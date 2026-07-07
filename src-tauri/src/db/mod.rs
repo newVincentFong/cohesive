@@ -4,7 +4,12 @@ use std::sync::Mutex;
 use rusqlite::{params, Connection};
 use tauri::{AppHandle, Manager};
 
-pub const SCHEMA_VERSION: i64 = 2;
+pub const SCHEMA_VERSION: i64 = 3;
+/// Oldest schema version that can be upgraded in place. Versions at or above
+/// this only differ by additive statements (schema.sql is idempotent), so the
+/// database is kept and the schema batch is simply re-applied. Anything older
+/// (or newer, from a downgrade) still gets the backup-and-reset treatment.
+const MIN_IN_PLACE_UPGRADE_VERSION: i64 = 2;
 const SCHEMA_VERSION_KEY: &str = "schema_version";
 
 pub struct AppState {
@@ -67,7 +72,12 @@ pub fn init_database(app: &AppHandle) -> Result<AppState, String> {
     let db_path = data_dir.join("cohesive.db");
     let needs_reset = if db_path.exists() {
         let probe = Connection::open(&db_path).map_err(|err| err.to_string())?;
-        read_schema_version(&probe) != Some(SCHEMA_VERSION)
+        match read_schema_version(&probe) {
+            Some(version) => {
+                version < MIN_IN_PLACE_UPGRADE_VERSION || version > SCHEMA_VERSION
+            }
+            None => true,
+        }
     } else {
         false
     };

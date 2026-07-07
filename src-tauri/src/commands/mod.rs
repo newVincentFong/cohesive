@@ -8,7 +8,8 @@ use crate::models::{
     AddMemoryInput, AgentRun, CodeProject, CreateAgentRunInput, CreateMessageInput,
     CreateSessionInput, CreateWritingDocumentInput, FileReadRequest, FileWriteRequest, MemoryItem,
     MemoryQuery, MemoryScope, Message, Session, ShellRunRequest, ShellRunResult, ToolRun,
-    UpdateAgentRunInput, UpdateMemoryInput, UpdateSessionInput, WritingDocument,
+    TraceColumn, TraceMessage, TraceRun, UpdateAgentRunInput, UpdateMemoryInput,
+    UpdateSessionInput, UpsertTraceColumnInput, UpsertTraceMessageInput, WritingDocument,
 };
 use crate::shell::runner;
 
@@ -468,6 +469,170 @@ pub fn agent_run_list(
             .map_err(|err| err.to_string())?;
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(|err| err.to_string())
+    })
+}
+
+const TRACE_COLUMN_SELECT: &str = "SELECT id, run_id, session_id, kind, label, status, parent_column_id, tools_json, started_at, ended_at FROM trace_columns";
+const TRACE_MESSAGE_SELECT: &str = "SELECT id, run_id, column_id, iteration, idx, role, content, tool_calls_json, tool_call_id, created_at, updated_at FROM trace_messages";
+
+fn map_trace_column(row: &rusqlite::Row<'_>) -> rusqlite::Result<TraceColumn> {
+    Ok(TraceColumn {
+        id: row.get(0)?,
+        run_id: row.get(1)?,
+        session_id: row.get(2)?,
+        kind: row.get(3)?,
+        label: row.get(4)?,
+        status: row.get(5)?,
+        parent_column_id: row.get(6)?,
+        tools_json: row.get(7)?,
+        started_at: row.get(8)?,
+        ended_at: row.get(9)?,
+    })
+}
+
+fn map_trace_message(row: &rusqlite::Row<'_>) -> rusqlite::Result<TraceMessage> {
+    Ok(TraceMessage {
+        id: row.get(0)?,
+        run_id: row.get(1)?,
+        column_id: row.get(2)?,
+        iteration: row.get(3)?,
+        idx: row.get(4)?,
+        role: row.get(5)?,
+        content: row.get(6)?,
+        tool_calls_json: row.get(7)?,
+        tool_call_id: row.get(8)?,
+        created_at: row.get(9)?,
+        updated_at: row.get(10)?,
+    })
+}
+
+#[tauri::command]
+pub fn trace_column_upsert(
+    state: tauri::State<'_, AppState>,
+    input: UpsertTraceColumnInput,
+) -> Result<(), String> {
+    with_db(&state, |db| {
+        db.execute(
+            "INSERT INTO trace_columns (run_id, id, session_id, kind, label, status, parent_column_id, tools_json, started_at, ended_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+             ON CONFLICT(run_id, id) DO UPDATE SET
+               status = excluded.status,
+               ended_at = COALESCE(excluded.ended_at, trace_columns.ended_at)",
+            params![
+                input.run_id,
+                input.id,
+                input.session_id,
+                input.kind,
+                input.label,
+                input.status,
+                input.parent_column_id,
+                input.tools_json,
+                input.started_at,
+                input.ended_at
+            ],
+        )
+        .map_err(|err| err.to_string())?;
+        Ok(())
+    })
+}
+
+#[tauri::command]
+pub fn trace_message_upsert_batch(
+    state: tauri::State<'_, AppState>,
+    inputs: Vec<UpsertTraceMessageInput>,
+) -> Result<(), String> {
+    if inputs.is_empty() {
+        return Ok(());
+    }
+    let now = now_iso();
+    with_db(&state, |db| {
+        let tx = db.unchecked_transaction().map_err(|err| err.to_string())?;
+        {
+            let mut stmt = tx
+                .prepare(
+                    "INSERT INTO trace_messages (id, run_id, column_id, iteration, idx, role, content, tool_calls_json, tool_call_id, created_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+                     ON CONFLICT(id) DO UPDATE SET
+                       content = excluded.content,
+                       tool_calls_json = excluded.tool_calls_json,
+                       updated_at = ?11",
+                )
+                .map_err(|err| err.to_string())?;
+            for input in &inputs {
+                stmt.execute(params![
+                    input.id,
+                    input.run_id,
+                    input.column_id,
+                    input.iteration,
+                    input.idx,
+                    input.role,
+                    input.content,
+                    input.tool_calls_json,
+                    input.tool_call_id,
+                    input.created_at,
+                    now
+                ])
+                .map_err(|err| err.to_string())?;
+            }
+        }
+        tx.commit().map_err(|err| err.to_string())
+    })
+}
+
+#[tauri::command]
+pub fn trace_get_by_run(
+    state: tauri::State<'_, AppState>,
+    run_id: String,
+) -> Result<TraceRun, String> {
+    with_db(&state, |db| {
+        let mut column_stmt = db
+            .prepare(&format!(
+                "{TRACE_COLUMN_SELECT} WHERE run_id = ?1 ORDER BY started_at ASC"
+            ))
+            .map_err(|err| err.to_string())?;
+        let columns = column_stmt
+            .query_map(params![run_id], map_trace_column)
+            .map_err(|err| err.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|err| err.to_string())?;
+
+        let mut message_stmt = db
+            .prepare(&format!(
+                "{TRACE_MESSAGE_SELECT} WHERE run_id = ?1 ORDER BY idx ASC, created_at ASC"
+            ))
+            .map_err(|err| err.to_string())?;
+        let messages = message_stmt
+            .query_map(params![run_id], map_trace_message)
+            .map_err(|err| err.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|err| err.to_string())?;
+
+        Ok(TraceRun { columns, messages })
+    })
+}
+
+/// Deletes traces beyond the most recent `keep_runs` runs (per whole app, not
+/// per session) so long-lived installs do not accumulate unbounded trace data.
+#[tauri::command]
+pub fn trace_prune(state: tauri::State<'_, AppState>, keep_runs: i64) -> Result<(), String> {
+    let keep = keep_runs.max(0);
+    with_db(&state, |db| {
+        db.execute(
+            "DELETE FROM trace_columns WHERE run_id NOT IN (
+                SELECT run_id FROM trace_columns
+                GROUP BY run_id
+                ORDER BY MAX(started_at) DESC
+                LIMIT ?1
+            )",
+            params![keep],
+        )
+        .map_err(|err| err.to_string())?;
+        db.execute(
+            "DELETE FROM trace_messages WHERE run_id NOT IN (SELECT run_id FROM trace_columns)",
+            [],
+        )
+        .map_err(|err| err.to_string())?;
+        Ok(())
     })
 }
 

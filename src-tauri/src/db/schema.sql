@@ -86,6 +86,36 @@ CREATE TABLE IF NOT EXISTS tool_runs (
   FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS trace_columns (
+  run_id TEXT NOT NULL,
+  id TEXT NOT NULL,
+  session_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  label TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'running',
+  parent_column_id TEXT,
+  tools_json TEXT,
+  started_at TEXT NOT NULL,
+  ended_at TEXT,
+  PRIMARY KEY (run_id, id),
+  FOREIGN KEY(run_id) REFERENCES agent_runs(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS trace_messages (
+  id TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL,
+  column_id TEXT NOT NULL,
+  iteration INTEGER NOT NULL,
+  idx INTEGER NOT NULL,
+  role TEXT NOT NULL,
+  content TEXT,
+  tool_calls_json TEXT,
+  tool_call_id TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT,
+  FOREIGN KEY(run_id, column_id) REFERENCES trace_columns(run_id, id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS memory_items (
   id TEXT PRIMARY KEY,
   domain TEXT NOT NULL,
@@ -124,3 +154,7 @@ CREATE INDEX IF NOT EXISTS idx_agent_runs_session ON agent_runs(session_id);
 CREATE INDEX IF NOT EXISTS idx_memory_domain ON memory_items(domain);
 CREATE INDEX IF NOT EXISTS idx_tool_runs_session ON tool_runs(session_id);
 CREATE INDEX IF NOT EXISTS idx_tool_runs_run ON tool_runs(run_id);
+CREATE INDEX IF NOT EXISTS idx_trace_columns_run ON trace_columns(run_id);
+CREATE INDEX IF NOT EXISTS idx_trace_columns_session ON trace_columns(session_id);
+CREATE INDEX IF NOT EXISTS idx_trace_messages_column ON trace_messages(column_id);
+CREATE INDEX IF NOT EXISTS idx_trace_messages_run ON trace_messages(run_id);
