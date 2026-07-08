@@ -2,6 +2,7 @@ mod commands;
 mod db;
 mod llm;
 mod models;
+mod project_ops;
 mod settings;
 mod shell;
 
@@ -56,6 +57,9 @@ pub fn run() {
             commands::shell_run,
             commands::project_read_file,
             commands::project_write_file,
+            commands::project_search,
+            commands::project_glob,
+            commands::project_edit_file,
             commands::tool_run_list,
             llm::llm_complete,
             llm::llm_stream,

@@ -367,6 +367,7 @@ pub struct ShellRunRequest {
     pub confirmed: Option<bool>,
     pub run_id: Option<String>,
     pub message_id: Option<String>,
+    pub timeout_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -395,6 +396,69 @@ pub struct FileWriteRequest {
     pub mode: String,
     pub relative_path: String,
     pub content: String,
+    pub confirmed: Option<bool>,
+    pub run_id: Option<String>,
+    pub message_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchRequest {
+    pub session_id: String,
+    pub project_path: String,
+    pub mode: String,
+    pub pattern: String,
+    pub include_glob: Option<String>,
+    pub case_insensitive: Option<bool>,
+    pub max_results: Option<usize>,
+    pub run_id: Option<String>,
+    pub message_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchMatch {
+    pub relative_path: String,
+    pub line_number: i64,
+    pub line_content: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchResult {
+    pub matches: Vec<SearchMatch>,
+    pub truncated: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GlobRequest {
+    pub session_id: String,
+    pub project_path: String,
+    pub mode: String,
+    pub pattern: String,
+    pub max_results: Option<usize>,
+    pub run_id: Option<String>,
+    pub message_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GlobResult {
+    pub paths: Vec<String>,
+    pub truncated: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditFileRequest {
+    pub session_id: String,
+    pub project_path: String,
+    pub mode: String,
+    pub relative_path: String,
+    pub old_string: String,
+    pub new_string: String,
+    pub replace_all: Option<bool>,
     pub confirmed: Option<bool>,
     pub run_id: Option<String>,
     pub message_id: Option<String>,

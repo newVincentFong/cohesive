@@ -6,10 +6,10 @@ import { agentToolsToLlmDefinitions, runAgentLoop, type AgentLoopMessageEvent, t
 import type { AgentContext, AgentProgress } from "./agent.types";
 import type { AgentTraceCallbacks } from "./agent-trace.types";
 import { createTracedMessage } from "./agent-trace.types";
-import { EXPLORE_MAIN_AGENT_PROMPT } from "@/core/code/prompts/explore.prompts";
+import { BUILD_MAIN_AGENT_PROMPT } from "@/core/code/prompts/build.prompts";
 import { getToolsForRole } from "./tools";
 
-const MAIN_AGENT_MAX_ITERATIONS = 10;
+const MAIN_AGENT_MAX_ITERATIONS = 25;
 const MAIN_COLUMN_ID = "main";
 
 function historyToLlmMessages(history: Message[]): LlmMessage[] {
@@ -44,7 +44,7 @@ function createLoopMessageHandler(
   };
 }
 
-export async function runExploreAgent(input: {
+export async function runBuildAgent(input: {
   session: Session;
   project: CodeProject;
   userMessage: string;
@@ -63,15 +63,21 @@ export async function runExploreAgent(input: {
     onProgress: input.onProgress,
   };
 
-  const mainTools = getToolsForRole("explore-main", input.runMode, {
+  const mainTools = getToolsForRole("build-main", input.runMode, {
     onProgress: input.onProgress,
     onTraceCallbacks: input.onTrace,
+    onTrace: async (trace) => {
+      const phase = phaseForTool(trace.toolName);
+      if (phase) {
+        await input.onProgress({ phase, toolTrace: trace });
+      }
+    },
   });
 
   input.onTrace?.onColumnStart({
     id: MAIN_COLUMN_ID,
     kind: "main",
-    label: "Main agent",
+    label: "Build agent",
     tools: agentToolsToLlmDefinitions(mainTools),
   });
 
@@ -79,11 +85,11 @@ export async function runExploreAgent(input: {
 
   try {
     const result = await runAgentLoop({
-      systemPrompt: EXPLORE_MAIN_AGENT_PROMPT,
+      systemPrompt: BUILD_MAIN_AGENT_PROMPT,
       messages: [...historyMessages, { role: "user", content: input.userMessage }],
       tools: mainTools,
       maxIterations: MAIN_AGENT_MAX_ITERATIONS,
-      temperature: 0.4,
+      temperature: 0.3,
       ctx,
       onLoopMessage: createLoopMessageHandler(input.onTrace, MAIN_COLUMN_ID),
       onLoopMessageUpdate: createLoopMessageUpdateHandler(input.onTrace, MAIN_COLUMN_ID),
@@ -97,5 +103,22 @@ export async function runExploreAgent(input: {
   } catch (err) {
     input.onTrace?.onColumnEnd(MAIN_COLUMN_ID, "error");
     throw err;
+  }
+}
+
+function phaseForTool(toolName: string): AgentProgress["phase"] | undefined {
+  switch (toolName) {
+    case "read_file":
+      return "reading";
+    case "grep":
+    case "glob":
+      return "searching";
+    case "edit_file":
+    case "write_file":
+      return "editing";
+    case "run_command":
+      return "running_command";
+    default:
+      return undefined;
   }
 }

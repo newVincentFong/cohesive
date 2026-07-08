@@ -4,6 +4,8 @@ use crate::commands::{insert_tool_run, truncate_tail, update_tool_run};
 use crate::db::{now_iso, AppState};
 use crate::models::{ShellRunRequest, ShellRunResult, ToolRun};
 
+const DEFAULT_TIMEOUT_MS: u64 = 120_000;
+
 pub async fn run_shell(
     state: tauri::State<'_, AppState>,
     request: ShellRunRequest,
@@ -73,13 +75,36 @@ pub async fn run_shell(
     tool_run.status = "running".to_string();
     update_tool_run(&state, &tool_run)?;
 
-    let output = tokio::process::Command::new("sh")
+    let timeout_ms = request.timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS);
+    let child = tokio::process::Command::new("sh")
         .arg("-lc")
         .arg(&request.command)
         .current_dir(&canonical_cwd)
-        .output()
-        .await
+        .kill_on_drop(true)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
         .map_err(|err| err.to_string())?;
+
+    let output_result = tokio::time::timeout(
+        std::time::Duration::from_millis(timeout_ms),
+        child.wait_with_output(),
+    )
+    .await;
+
+    let output = match output_result {
+        Ok(result) => result.map_err(|err| err.to_string())?,
+        Err(_) => {
+            tool_run.status = "cancelled".to_string();
+            tool_run.stderr_tail = Some(format!("Command timed out after {timeout_ms}ms"));
+            tool_run.finished_at = Some(now_iso());
+            update_tool_run(&state, &tool_run)?;
+            return Ok(ShellRunResult {
+                tool_run,
+                blocked_reason: Some(format!("Command timed out after {timeout_ms}ms")),
+            });
+        }
+    };
 
     tool_run.status = if output.status.success() {
         "completed".to_string()

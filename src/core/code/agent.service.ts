@@ -1,7 +1,12 @@
 import type {
   CodeProject,
+  EditFileRequest,
   FileReadRequest,
   FileWriteRequest,
+  GlobRequest,
+  GlobResult,
+  SearchRequest,
+  SearchResult,
   ShellRunRequest,
   ShellRunResult,
   ToolRun,
@@ -32,6 +37,24 @@ export async function writeProjectFile(
   request: FileWriteRequest,
 ): Promise<ToolRun> {
   return invoke<ToolRun>("project_write_file", { request });
+}
+
+export async function searchProject(
+  request: SearchRequest,
+): Promise<SearchResult> {
+  return invoke<SearchResult>("project_search", { request });
+}
+
+export async function globProject(
+  request: GlobRequest,
+): Promise<GlobResult> {
+  return invoke<GlobResult>("project_glob", { request });
+}
+
+export async function editProjectFile(
+  request: EditFileRequest,
+): Promise<ToolRun> {
+  return invoke<ToolRun>("project_edit_file", { request });
 }
 
 export async function listToolRuns(sessionId: string): Promise<ToolRun[]> {

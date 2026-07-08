@@ -13,7 +13,14 @@ export interface ToolTrace {
 }
 
 export interface AgentProgress {
-  phase: "delegating" | "reading" | "explore_result" | "thinking";
+  phase:
+    | "delegating"
+    | "reading"
+    | "explore_result"
+    | "thinking"
+    | "searching"
+    | "editing"
+    | "running_command";
   toolTrace?: ToolTrace;
 }
 
@@ -38,26 +45,8 @@ export interface AgentTool {
   execute(args: unknown, ctx: AgentContext): Promise<string>;
 }
 
-export function truncateFileContent(content: string, maxChars = 12_000): string {
-  if (content.length <= maxChars) {
-    return content;
-  }
-  const headSize = Math.floor(maxChars * 0.6);
-  const tailSize = maxChars - headSize - 80;
-  const head = content.slice(0, headSize);
-  const tail = content.slice(content.length - tailSize);
-  return `${head}\n\n... [truncated ${content.length - maxChars} chars] ...\n\n${tail}`;
-}
-
-export function summarizeForDisplay(content: string, maxLen = 400): string {
-  const oneLine = content.replace(/\s+/g, " ").trim();
-  if (oneLine.length <= maxLen) {
-    return oneLine;
-  }
-  return `${oneLine.slice(0, maxLen)}…`;
-}
-
-export function countLines(content: string): number {
-  if (!content) return 0;
-  return content.split("\n").length;
-}
+export {
+  countLines,
+  summarizeForDisplay,
+  truncateFileContent,
+} from "./tools/output-budget";

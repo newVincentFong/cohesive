@@ -35,12 +35,36 @@ import type {
   AgentTraceColumn,
 } from "@/core/code/agents/agent-trace.types";
 import { runExploreAgent } from "@/core/code/agents/explore-main-agent";
+import { runBuildAgent } from "@/core/code/agents/build-main-agent";
 import { AgentTracePanel } from "@/components/code/AgentTracePanel";
 import { MarkdownMessage } from "@/components/message/MarkdownMessage";
 import { STREAMING_MESSAGE_ID } from "@/core/message/streaming.constants";
 import { SessionSidebarList } from "@/components/session/SessionSidebarList";
 
 const TRACE_RETENTION_RUNS = 200;
+
+function agentPhaseLabel(update: AgentProgress): string {
+  switch (update.phase) {
+    case "reading":
+      return "Reading files...";
+    case "searching":
+      return "Searching codebase...";
+    case "editing":
+      return "Editing files...";
+    case "running_command":
+      return "Running command...";
+    case "delegating":
+      return "Delegating exploration...";
+    case "explore_result":
+      return "Thinking...";
+    default:
+      return "Thinking...";
+  }
+}
+
+function isAgentMode(mode: CodeMode): boolean {
+  return mode === "explore" || mode === "build";
+}
 
 function upsertStreamingAssistant(
   messages: Message[],
@@ -291,7 +315,8 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
     const content = draft.trim();
     const parentId = session.currentLeafMessageId ?? null;
     const isFirstMessage = parentId === null;
-    const isExploreMode = composerMode === "explore";
+    const isBuildMode = composerMode === "build";
+    const runsAgent = isAgentMode(composerMode);
 
     setBusy(true);
     setError(null);
@@ -348,7 +373,7 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
         prev ? { ...prev, currentLeafMessageId: userMessage.id } : prev,
       );
 
-      if (!isExploreMode) {
+      if (!runsAgent) {
         await updateAgentRun(agentRun.id, { status: "done" });
         return;
       }
@@ -362,7 +387,7 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
         throw new Error("Project not found for this session.");
       }
 
-      setAgentPhase("Exploring...");
+      setAgentPhase(isBuildMode ? "Building..." : "Exploring...");
       const priorHistory = path
         .filter((message) => message.role === "user" || message.role === "assistant")
         .slice(0, -1);
@@ -374,30 +399,28 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
       });
       setMessages((prev) => upsertStreamingAssistant(prev, session.id, ""));
 
+      const agentInput = {
+        session,
+        project,
+        userMessage: content,
+        history: priorHistory,
+        runId: agentRun.id,
+        runMode: composerMode,
+        onProgress: async (update: AgentProgress) => {
+          setAgentPhase(agentPhaseLabel(update));
+          await persistToolTrace(update);
+        },
+        onTrace: tracePersister.callbacks,
+        onAnswerDelta: (streamingContent: string) => {
+          setMessages((prev) => upsertStreamingAssistant(prev, session.id, streamingContent));
+        },
+      };
+
       let answer: string;
       try {
-        answer = await runExploreAgent({
-          session,
-          project,
-          userMessage: content,
-          history: priorHistory,
-          runId: agentRun.id,
-          runMode: composerMode,
-          onProgress: async (update) => {
-            if (update.phase === "reading") {
-              setAgentPhase("Reading files...");
-            } else if (update.phase === "delegating") {
-              setAgentPhase("Delegating exploration...");
-            } else {
-              setAgentPhase("Thinking...");
-            }
-            await persistToolTrace(update);
-          },
-          onTrace: tracePersister.callbacks,
-          onAnswerDelta: (streamingContent) => {
-            setMessages((prev) => upsertStreamingAssistant(prev, session.id, streamingContent));
-          },
-        });
+        answer = isBuildMode
+          ? await runBuildAgent(agentInput)
+          : await runExploreAgent(agentInput);
       } finally {
         await tracePersister.finish();
         await refreshTraceRuns(session.id);
@@ -436,14 +459,14 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
     return <div className="empty-state">Pick a project and start a code session.</div>;
   }
 
-  const isExploreMode = composerMode === "explore";
+  const showTrace = isAgentMode(composerMode);
 
   return (
     <>
       <div className="panel-header">
         <strong>{session.title}</strong>
         <div className="panel-header-actions">
-          {isExploreMode ? (
+          {showTrace ? (
             <button
               type="button"
               className="secondary-button trace-toggle-button"
@@ -500,9 +523,11 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
                   value={draft}
                   onChange={(event) => setDraft(event.target.value)}
                   placeholder={
-                    isExploreMode
-                      ? "Ask the coding agent to explore this codebase..."
-                      : "Switch to explore mode for agent chat"
+                    composerMode === "build"
+                      ? "Ask the coding agent to implement or fix something..."
+                      : composerMode === "explore"
+                        ? "Ask the coding agent to explore this codebase..."
+                        : "Switch to explore or build mode for agent chat"
                   }
                   disabled={busy}
                 />

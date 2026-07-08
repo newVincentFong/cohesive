@@ -6,10 +6,11 @@ use uuid::Uuid;
 use crate::db::{now_iso, parse_metadata, with_db, AppState};
 use crate::models::{
     AddMemoryInput, AgentRun, CodeProject, CreateAgentRunInput, CreateMessageInput,
-    CreateSessionInput, CreateWritingDocumentInput, FileReadRequest, FileWriteRequest, MemoryItem,
-    MemoryQuery, MemoryScope, Message, Session, ShellRunRequest, ShellRunResult, ToolRun,
-    TraceColumn, TraceMessage, TraceRun, UpdateAgentRunInput, UpdateMemoryInput,
-    UpdateSessionInput, UpsertTraceColumnInput, UpsertTraceMessageInput, WritingDocument,
+    CreateSessionInput, CreateWritingDocumentInput, EditFileRequest, FileReadRequest,
+    FileWriteRequest, GlobRequest, GlobResult, MemoryItem, MemoryQuery, MemoryScope, Message,
+    SearchRequest, SearchResult, Session, ShellRunRequest, ShellRunResult, ToolRun, TraceColumn,
+    TraceMessage, TraceRun, UpdateAgentRunInput, UpdateMemoryInput, UpdateSessionInput,
+    UpsertTraceColumnInput, UpsertTraceMessageInput, WritingDocument,
 };
 use crate::shell::runner;
 
@@ -1045,6 +1046,188 @@ pub async fn shell_run(
     request: ShellRunRequest,
 ) -> Result<ShellRunResult, String> {
     runner::run_shell(state, request).await
+}
+
+fn has_read_file_in_run(state: &AppState, run_id: &str, relative_path: &str) -> Result<bool, String> {
+    with_db(state, |db| {
+        let count: i64 = db
+            .query_row(
+                "SELECT COUNT(*) FROM tool_runs WHERE run_id = ?1 AND kind = 'read_file' AND target_path = ?2 AND status = 'completed'",
+                params![run_id, relative_path],
+                |row| row.get(0),
+            )
+            .map_err(|err| err.to_string())?;
+        Ok(count > 0)
+    })
+}
+
+#[tauri::command]
+pub fn project_search(
+    state: tauri::State<'_, AppState>,
+    request: SearchRequest,
+) -> Result<SearchResult, String> {
+    if !crate::shell::permissions::can_read_files(&request.mode) {
+        return Err(format!("Search is blocked in {} mode", request.mode));
+    }
+
+    let max_results = request.max_results.unwrap_or(100).min(500);
+    let root = std::fs::canonicalize(&request.project_path).map_err(|err| err.to_string())?;
+    let matches = crate::project_ops::search_project(
+        &root,
+        &request.pattern,
+        request.include_glob.as_deref(),
+        request.case_insensitive.unwrap_or(false),
+        max_results + 1,
+    )?;
+
+    let truncated = matches.len() > max_results;
+    let result_matches = matches.into_iter().take(max_results).collect::<Vec<_>>();
+    let summary = format!(
+        "pattern={} matches={}{}",
+        request.pattern,
+        result_matches.len(),
+        if truncated { "+" } else { "" }
+    );
+
+    let tool_run = ToolRun {
+        id: Uuid::new_v4().to_string(),
+        session_id: request.session_id,
+        run_id: request.run_id,
+        message_id: request.message_id,
+        kind: "search".to_string(),
+        command: Some(request.pattern.clone()),
+        cwd: Some(request.project_path.clone()),
+        target_path: request.include_glob.clone(),
+        status: "completed".to_string(),
+        exit_code: Some(result_matches.len() as i64),
+        stdout_tail: Some(truncate_tail(&summary, 4000)),
+        stderr_tail: None,
+        requires_confirmation: false,
+        started_at: now_iso(),
+        finished_at: Some(now_iso()),
+    };
+    insert_tool_run(&state, &tool_run)?;
+
+    Ok(SearchResult {
+        matches: result_matches,
+        truncated,
+    })
+}
+
+#[tauri::command]
+pub fn project_glob(
+    state: tauri::State<'_, AppState>,
+    request: GlobRequest,
+) -> Result<GlobResult, String> {
+    if !crate::shell::permissions::can_read_files(&request.mode) {
+        return Err(format!("Glob is blocked in {} mode", request.mode));
+    }
+
+    let max_results = request.max_results.unwrap_or(200).min(500);
+    let root = std::fs::canonicalize(&request.project_path).map_err(|err| err.to_string())?;
+    let paths = crate::project_ops::glob_project(&root, &request.pattern, max_results + 1)?;
+    let truncated = paths.len() > max_results;
+    let result_paths = paths.into_iter().take(max_results).collect::<Vec<_>>();
+    let summary = format!(
+        "pattern={} paths={}{}",
+        request.pattern,
+        result_paths.len(),
+        if truncated { "+" } else { "" }
+    );
+
+    let tool_run = ToolRun {
+        id: Uuid::new_v4().to_string(),
+        session_id: request.session_id,
+        run_id: request.run_id,
+        message_id: request.message_id,
+        kind: "glob".to_string(),
+        command: Some(request.pattern.clone()),
+        cwd: Some(request.project_path.clone()),
+        target_path: None,
+        status: "completed".to_string(),
+        exit_code: Some(result_paths.len() as i64),
+        stdout_tail: Some(truncate_tail(&summary, 4000)),
+        stderr_tail: None,
+        requires_confirmation: false,
+        started_at: now_iso(),
+        finished_at: Some(now_iso()),
+    };
+    insert_tool_run(&state, &tool_run)?;
+
+    Ok(GlobResult {
+        paths: result_paths,
+        truncated,
+    })
+}
+
+#[tauri::command]
+pub fn project_edit_file(
+    state: tauri::State<'_, AppState>,
+    request: EditFileRequest,
+) -> Result<ToolRun, String> {
+    if !crate::shell::permissions::can_write_files(&request.mode) {
+        return Err(format!("Edit files is blocked in {} mode", request.mode));
+    }
+
+    let run_id = request
+        .run_id
+        .as_deref()
+        .ok_or_else(|| "runId is required for edit_file".to_string())?;
+
+    if !has_read_file_in_run(&state, run_id, &request.relative_path)? {
+        return Err(format!(
+            "Must read {} in this run before editing. Use read_file first.",
+            request.relative_path
+        ));
+    }
+
+    let requires_confirmation =
+        crate::shell::permissions::requires_confirmation_for_write(&request.relative_path);
+    let confirmed = request.confirmed.unwrap_or(false);
+    let replace_all = request.replace_all.unwrap_or(false);
+    let mut tool_run = ToolRun {
+        id: Uuid::new_v4().to_string(),
+        session_id: request.session_id,
+        run_id: request.run_id.clone(),
+        message_id: request.message_id,
+        kind: "edit_file".to_string(),
+        command: None,
+        cwd: Some(request.project_path.clone()),
+        target_path: Some(request.relative_path.clone()),
+        status: "pending".to_string(),
+        exit_code: None,
+        stdout_tail: None,
+        stderr_tail: None,
+        requires_confirmation,
+        started_at: now_iso(),
+        finished_at: None,
+    };
+    insert_tool_run(&state, &tool_run)?;
+
+    if requires_confirmation && !confirmed {
+        tool_run.status = "pending".to_string();
+        return Ok(tool_run);
+    }
+
+    let path = resolve_project_path(&request.project_path, &request.relative_path)?;
+    let content = crate::db::read_text_file(&path)?;
+    let updated = crate::project_ops::edit_file_content(
+        &content,
+        &request.old_string,
+        &request.new_string,
+        replace_all,
+    )?;
+    crate::db::write_text_file(&path, &updated)?;
+
+    tool_run.status = "completed".to_string();
+    tool_run.exit_code = Some(0);
+    tool_run.stdout_tail = Some(format!(
+        "Edited {} (replaceAll={})",
+        request.relative_path, replace_all
+    ));
+    tool_run.finished_at = Some(now_iso());
+    update_tool_run(&state, &tool_run)?;
+    Ok(tool_run)
 }
 
 pub fn truncate_tail(value: &str, max_len: usize) -> String {

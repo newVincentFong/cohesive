@@ -13,7 +13,7 @@ export interface ToolRun {
   sessionId: string;
   runId?: string;
   messageId?: string;
-  kind: "shell" | "read_file" | "write_file" | "list_dir";
+  kind: "shell" | "read_file" | "write_file" | "list_dir" | "search" | "glob" | "edit_file";
   command?: string;
   cwd?: string;
   targetPath?: string;
@@ -35,6 +35,7 @@ export interface ShellRunRequest {
   confirmed?: boolean;
   runId?: string;
   messageId?: string;
+  timeoutMs?: number;
 }
 
 export interface ShellRunResult {
@@ -57,6 +58,57 @@ export interface FileWriteRequest {
   mode: CodeMode;
   relativePath: string;
   content: string;
+  confirmed?: boolean;
+  runId?: string;
+  messageId?: string;
+}
+
+export interface SearchRequest {
+  sessionId: string;
+  projectPath: string;
+  mode: CodeMode;
+  pattern: string;
+  includeGlob?: string;
+  caseInsensitive?: boolean;
+  maxResults?: number;
+  runId?: string;
+  messageId?: string;
+}
+
+export interface SearchMatch {
+  relativePath: string;
+  lineNumber: number;
+  lineContent: string;
+}
+
+export interface SearchResult {
+  matches: SearchMatch[];
+  truncated: boolean;
+}
+
+export interface GlobRequest {
+  sessionId: string;
+  projectPath: string;
+  mode: CodeMode;
+  pattern: string;
+  maxResults?: number;
+  runId?: string;
+  messageId?: string;
+}
+
+export interface GlobResult {
+  paths: string[];
+  truncated: boolean;
+}
+
+export interface EditFileRequest {
+  sessionId: string;
+  projectPath: string;
+  mode: CodeMode;
+  relativePath: string;
+  oldString: string;
+  newString: string;
+  replaceAll?: boolean;
   confirmed?: boolean;
   runId?: string;
   messageId?: string;
