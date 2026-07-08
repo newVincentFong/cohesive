@@ -1,0 +1,38 @@
+## Commit Message Rules
+Write commit messages that explain both what changed and why.
+
+Use this format:
+
+Capitalized, short imperative summary around 50 characters
+
+Optional body wrapped at about 72 characters. Use the body when the
+change needs context, justification, implementation notes, tradeoffs, or
+review guidance.
+
+The summary should:
+- Be written in the imperative mood: "Add", "Fix", "Rename", "Remove",
+  "Refactor", not "Added", "Fixes", or "Refactored".
+- Concisely state the intent of the change.
+- Avoid vague summaries like "Update code", "Fix stuff", "WIP", or
+  "Address feedback".
+
+The body should answer the useful parts of:
+- Intent: what does this commit accomplish?
+- Context: why does the code need to behave this way now?
+- Justification: why is this change the right approach?
+- Implementation: what was changed to accomplish it?
+
+Do not over-explain simple commits, but include enough context that a reader
+can understand the reason for the change without reconstructing it from the
+diff alone.
+
+Prefer:
+
+Add '--gray' alias for '--grey'
+
+Include '--gray' as an alternative name for '--grey' in the argument
+definition so users can specify either common spelling.
+
+Avoid:
+
+fixed gray thing
