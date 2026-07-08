@@ -14,6 +14,15 @@ import { createLlmProvider } from "@/core/llm/deepseek-provider";
 import { STREAMING_MESSAGE_ID } from "@/core/message/streaming.constants";
 import { MarkdownMessage } from "@/components/message/MarkdownMessage";
 import { SessionSidebarList } from "@/components/session/SessionSidebarList";
+import { EmptyState } from "@/components/layout/EmptyState";
+import { TrustBadge } from "@/components/layout/TrustBadge";
+import { handleComposerKeyDown } from "@/components/chat/composer-keydown";
+import { messageRoleLabel } from "@/components/chat/message-labels";
+import { useChatAutoScroll } from "@/components/chat/useChatAutoScroll";
+import {
+  formatFullDateTime,
+  formatRelativeTime,
+} from "@/core/utils/relative-time";
 
 interface MindSurfaceProps {
   activeSessionId: string | null;
@@ -71,7 +80,11 @@ export function MindSidebar({ activeSessionId, onSelectSession }: MindSurfacePro
           activeSessionId={activeSessionId}
           onSelectSession={onSelectSession}
           onSessionsChange={() => void refresh()}
-          renderSubtitle={(session) => new Date(session.updatedAt).toLocaleString()}
+          renderSubtitle={(session) => (
+            <span title={formatFullDateTime(session.updatedAt)}>
+              {formatRelativeTime(session.updatedAt)}
+            </span>
+          )}
         />
       </div>
     </>
@@ -84,6 +97,7 @@ export function MindMainPanel({ activeSessionId }: { activeSessionId: string | n
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { threadRef, handleScroll } = useChatAutoScroll([messages, busy, error]);
 
   useEffect(() => {
     if (!activeSessionId) {
@@ -188,21 +202,27 @@ export function MindMainPanel({ activeSessionId }: { activeSessionId: string | n
   }
 
   if (!session) {
-    return <div className="empty-state">Start a private mind session.</div>;
+    return (
+      <EmptyState
+        title="Start a mind session"
+        description="Create a private session from the sidebar to reflect, think, and talk with Cohesive."
+        icon="◎"
+      />
+    );
   }
 
   return (
     <>
       <div className="panel-header">
         <strong>{session.title}</strong>
-        <span className="muted">Private · local memory</span>
+        <TrustBadge label="Private · local memory" />
       </div>
       <div className="panel-body">
-        <div className="chat-thread">
+        <div className="chat-thread" ref={threadRef} onScroll={handleScroll}>
           {messages.map((message) => (
             <div key={message.id} className={`chat-message ${message.role}`}>
               <div className="muted chat-message-role">
-                {message.role}
+                {messageRoleLabel(message.role)}
               </div>
               <MarkdownMessage
                 content={message.content}
@@ -210,21 +230,41 @@ export function MindMainPanel({ activeSessionId }: { activeSessionId: string | n
               />
             </div>
           ))}
+          {error ? (
+            <div className="chat-error-card">
+              <div className="chat-error-card-message">{error}</div>
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => setError(null)}
+              >
+                Dismiss
+              </button>
+            </div>
+          ) : null}
         </div>
       </div>
       <div className="chat-composer">
-        {error ? (
-          <div className="settings-message settings-message--error">{error}</div>
+        {busy ? (
+          <div className="composer-status-bar">
+            <span className="trace-running-dot" aria-hidden="true" />
+            Thinking...
+          </div>
         ) : null}
         <textarea
           className="textarea-input"
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
-          placeholder="Share what is on your mind..."
+          onKeyDown={(event) => handleComposerKeyDown(event, () => void handleSend())}
+          placeholder="Share what is on your mind... (Enter to send)"
           disabled={busy}
         />
-        <button className="primary-button" disabled={busy} onClick={() => void handleSend()}>
-          {busy ? "Thinking..." : "Send"}
+        <button
+          className="primary-button"
+          disabled={busy || !draft.trim()}
+          onClick={() => void handleSend()}
+        >
+          {busy ? <span className="button-spinner" aria-label="Thinking" /> : "Send"}
         </button>
       </div>
     </>

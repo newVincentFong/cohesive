@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { AppSettings } from "@/core/settings/settings.service";
 import {
   completeOnboarding,
@@ -12,10 +12,16 @@ interface OnboardingModalProps {
 }
 
 export function OnboardingModal({ onCompleted }: OnboardingModalProps) {
+  const titleId = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
   const [apiKey, setApiKey] = useState("");
   const [skipKey, setSkipKey] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
 
   async function handleSubmit() {
     setSaving(true);
@@ -35,9 +41,14 @@ export function OnboardingModal({ onCompleted }: OnboardingModalProps) {
 
   return (
     <div className="onboarding-overlay">
-      <div className="onboarding-card">
+      <div
+        className="onboarding-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+      >
         <div>
-          <h2>Welcome to Cohesive</h2>
+          <h2 id={titleId}>Welcome to Cohesive</h2>
           <p className="muted">
             Local-first workspace for Code, Writing, and Mind. Add your DeepSeek
             API key to enable AI features.
@@ -47,13 +58,14 @@ export function OnboardingModal({ onCompleted }: OnboardingModalProps) {
           value={apiKey}
           onChange={setApiKey}
           disabled={skipKey}
+          inputRef={inputRef}
         />
-        <label className="muted">
+        <label className="muted onboarding-checkbox-label">
           <input
             type="checkbox"
             checked={skipKey}
             onChange={(event) => setSkipKey(event.target.checked)}
-          />{" "}
+          />
           Configure later
         </label>
         {error ? <div style={{ color: "var(--danger)" }}>{error}</div> : null}

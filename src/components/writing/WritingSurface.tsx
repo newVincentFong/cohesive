@@ -5,12 +5,18 @@ import type {
 } from "@/core/writing/writing.types";
 import {
   createWritingDocument,
+  getWritingDocument,
   listWritingDocuments,
   readWritingDocumentContent,
   runSelectionAction,
   saveWritingDocumentContent,
 } from "@/core/writing/writing.service";
 import { MarkdownEditor } from "./MarkdownEditor";
+import { EmptyState } from "@/components/layout/EmptyState";
+import {
+  formatFullDateTime,
+  formatRelativeTime,
+} from "@/core/utils/relative-time";
 
 interface WritingSurfaceProps {
   activeDocumentId: string | null;
@@ -62,8 +68,8 @@ export function WritingSidebar({
             onClick={() => onSelectDocument(document.id)}
           >
             <div>{document.title}</div>
-            <div className="muted" style={{ fontSize: 12 }}>
-              {new Date(document.updatedAt).toLocaleString()}
+            <div className="muted" style={{ fontSize: 12 }} title={formatFullDateTime(document.updatedAt)}>
+              {formatRelativeTime(document.updatedAt)}
             </div>
           </button>
         ))}
@@ -87,9 +93,10 @@ export function WritingMainPanel({ activeDocumentId }: { activeDocumentId: strin
     }
 
     void (async () => {
-      const document = await readWritingDocumentContent(activeDocumentId);
-      setContent(document);
-      setTitle("Document");
+      const document = await getWritingDocument(activeDocumentId);
+      const content = await readWritingDocumentContent(activeDocumentId);
+      setContent(content);
+      setTitle(document?.title ?? "Untitled document");
     })();
   }, [activeDocumentId]);
 
@@ -129,8 +136,19 @@ export function WritingMainPanel({ activeDocumentId }: { activeDocumentId: strin
     }
   }
 
+  async function handleCopySuggestion() {
+    if (!actionOutput) return;
+    await navigator.clipboard.writeText(actionOutput);
+  }
+
   if (!activeDocumentId) {
-    return <div className="empty-state">Select or create a document to start writing.</div>;
+    return (
+      <EmptyState
+        title="No document selected"
+        description="Select an existing document from the sidebar or create a new one to start writing."
+        icon="✎"
+      />
+    );
   }
 
   return (
@@ -153,8 +171,24 @@ export function WritingMainPanel({ activeDocumentId }: { activeDocumentId: strin
       </div>
       {actionOutput ? (
         <div className="ai-suggestion-bar">
-          <div className="muted ai-suggestion-label">
-            AI suggestion
+          <div className="ai-suggestion-header">
+            <div className="muted ai-suggestion-label">AI suggestion</div>
+            <div className="ai-suggestion-actions">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => void handleCopySuggestion()}
+              >
+                Copy
+              </button>
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => setActionOutput(null)}
+              >
+                Dismiss
+              </button>
+            </div>
           </div>
           <div>{actionOutput}</div>
         </div>

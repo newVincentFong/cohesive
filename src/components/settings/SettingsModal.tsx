@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import {
   clearApiKey,
   getAppSettings,
@@ -12,6 +12,8 @@ interface SettingsModalProps {
 }
 
 export function SettingsModal({ open, onClose }: SettingsModalProps) {
+  const titleId = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
   const [hasApiKey, setHasApiKey] = useState(false);
   const [apiKey, setApiKey] = useState("");
   const [saving, setSaving] = useState(false);
@@ -28,7 +30,24 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     setError(null);
     setSuccess(null);
     void getAppSettings().then((settings) => setHasApiKey(settings.hasApiKey));
+    const timer = window.setTimeout(() => inputRef.current?.focus(), 0);
+    return () => window.clearTimeout(timer);
   }, [open]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [open, onClose]);
 
   async function handleSave() {
     const trimmed = apiKey.trim();
@@ -74,10 +93,13 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     <div className="onboarding-overlay" onClick={onClose}>
       <div
         className="onboarding-card settings-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
         onClick={(event) => event.stopPropagation()}
       >
         <div>
-          <h2>Settings</h2>
+          <h2 id={titleId}>Settings</h2>
         </div>
 
         <section className="settings-section">
@@ -91,7 +113,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
           <p className="muted settings-helper">
             Saved to .cohesive/api-key in your home folder. The key is never shown after saving.
           </p>
-          <ApiKeyField value={apiKey} onChange={setApiKey} />
+          <ApiKeyField value={apiKey} onChange={setApiKey} inputRef={inputRef} />
         </section>
 
         {error ? <div className="settings-message settings-message--error">{error}</div> : null}

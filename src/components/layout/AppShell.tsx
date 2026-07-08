@@ -4,6 +4,8 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { Domain } from "@/core/session/session.types";
 import { isMacFrameless } from "@/core/platform/tauri";
 import { DomainSwitch } from "./DomainSwitch";
+import { BrandMark } from "./BrandMark";
+import { TrustBadge } from "./TrustBadge";
 
 interface AppShellProps {
   activeDomain: Domain;
@@ -53,7 +55,10 @@ export function AppShell({
           <div className="topbar-traffic-spacer" aria-hidden="true" />
         ) : null}
         <div className="topbar-leading">
-          <div className="brand">Cohesive</div>
+          <div className="brand">
+            <BrandMark />
+            Cohesive
+          </div>
         </div>
         <div className="topbar-trailing">
           <button
@@ -64,7 +69,7 @@ export function AppShell({
           >
             Settings
           </button>
-          <span className="muted">Local first</span>
+          <TrustBadge label="Local first" />
         </div>
       </header>
       <div className="workspace">

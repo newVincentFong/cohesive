@@ -9,6 +9,7 @@ import {
   useOnboardingGate,
 } from "@/components/onboarding/OnboardingModal";
 import { SettingsModal } from "@/components/settings/SettingsModal";
+import { BrandMark } from "@/components/layout/BrandMark";
 
 export default function App() {
   const { loading, needsOnboarding, refresh } = useOnboardingGate();
@@ -56,7 +57,15 @@ export default function App() {
   }, [activeDomain, activeCodeSessionId, activeDocumentId, activeMindSessionId]);
 
   if (loading) {
-    return <div className="empty-state">Loading Cohesive...</div>;
+    return (
+      <div className="app-loading">
+        <div className="brand">
+          <BrandMark />
+          Cohesive
+        </div>
+        <div className="app-loading-spinner" aria-label="Loading" />
+      </div>
+    );
   }
 
   return (

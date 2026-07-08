@@ -40,6 +40,14 @@ import { AgentTracePanel } from "@/components/code/AgentTracePanel";
 import { MarkdownMessage } from "@/components/message/MarkdownMessage";
 import { STREAMING_MESSAGE_ID } from "@/core/message/streaming.constants";
 import { SessionSidebarList } from "@/components/session/SessionSidebarList";
+import { EmptyState } from "@/components/layout/EmptyState";
+import { handleComposerKeyDown } from "@/components/chat/composer-keydown";
+import {
+  codeModeHints,
+  formatCodeModeLabel,
+  messageRoleLabel,
+} from "@/components/chat/message-labels";
+import { useChatAutoScroll } from "@/components/chat/useChatAutoScroll";
 
 const TRACE_RETENTION_RUNS = 200;
 
@@ -183,7 +191,7 @@ export function CodeSidebar({ activeSessionId, onSelectSession }: CodeSurfacePro
           activeSessionId={activeSessionId}
           onSelectSession={onSelectSession}
           onSessionsChange={() => void refresh()}
-          renderSubtitle={(session) => session.defaultMode ?? "plan"}
+          renderSubtitle={(session) => formatCodeModeLabel(session.defaultMode ?? "plan")}
         />
       </div>
     </>
@@ -249,6 +257,7 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
   const [traceColumns, setTraceColumns] = useState<AgentTraceColumn[]>([]);
   const [traceRuns, setTraceRuns] = useState<AgentRun[]>([]);
   const [selectedTraceRunId, setSelectedTraceRunId] = useState<string | null>(null);
+  const { threadRef, handleScroll } = useChatAutoScroll([messages, busy, error]);
 
   async function refreshSessionData(nextSession: Session) {
     const path = await listConversationPath(
@@ -456,7 +465,13 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
   }
 
   if (!session) {
-    return <div className="empty-state">Pick a project and start a code session.</div>;
+    return (
+      <EmptyState
+        title="No code session yet"
+        description="Pick a project from the sidebar, then start a session to explore or build with the agent."
+        icon="</>"
+      />
+    );
   }
 
   const showTrace = isAgentMode(composerMode);
@@ -482,13 +497,14 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
         <div className={`panel-grid ${traceExpanded ? "panel-grid--trace-expanded" : ""}`}>
           <section className="panel-section">
             <h3 className="section-title">Agent chat</h3>
-            <div className="chat-thread compact">
+            <div className="chat-thread compact" ref={threadRef} onScroll={handleScroll}>
               {messages.map((message) => (
                 <div key={message.id} className={`chat-message ${message.role}`}>
-                  <div className="muted chat-message-role">
-                    {message.role}
-                    {message.toolName ? ` · ${message.toolName}` : ""}
-                  </div>
+                  {message.role !== "tool" ? (
+                    <div className="muted chat-message-role">
+                      {messageRoleLabel(message.role)}
+                    </div>
+                  ) : null}
                   {message.role === "tool" ? (
                     <ToolMessageBody message={message} />
                   ) : (
@@ -499,44 +515,63 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
                   )}
                 </div>
               ))}
+              {error ? (
+                <div className="chat-error-card">
+                  <div className="chat-error-card-message">{error}</div>
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={() => setError(null)}
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              ) : null}
             </div>
             <div className="chat-composer">
+              {busy && agentPhase ? (
+                <div className="composer-status-bar">
+                  <span className="trace-running-dot" aria-hidden="true" />
+                  {agentPhase}
+                </div>
+              ) : null}
               <div className="chat-composer-toolbar">
                 <div className="mode-switch">
                   {(["plan", "explore", "build"] as CodeMode[]).map((mode) => (
                     <button
                       key={mode}
                       className={composerMode === mode ? "active" : undefined}
+                      title={codeModeHints[mode]}
                       onClick={() => void handleModeChange(mode)}
                     >
-                      {mode}
+                      {formatCodeModeLabel(mode)}
                     </button>
                   ))}
                 </div>
               </div>
-              {error ? (
-                <div className="settings-message settings-message--error">{error}</div>
-              ) : null}
               <div className="chat-composer-row">
                 <textarea
                   className="textarea-input"
                   value={draft}
                   onChange={(event) => setDraft(event.target.value)}
+                  onKeyDown={(event) =>
+                    handleComposerKeyDown(event, () => void handleSendMessage())
+                  }
                   placeholder={
                     composerMode === "build"
-                      ? "Ask the coding agent to implement or fix something..."
+                      ? "Ask the coding agent to implement or fix something... (Enter to send)"
                       : composerMode === "explore"
-                        ? "Ask the coding agent to explore this codebase..."
-                        : "Switch to explore or build mode for agent chat"
+                        ? "Ask the coding agent to explore this codebase... (Enter to send)"
+                        : "Switch to explore or build mode for agent chat (Enter to send)"
                   }
                   disabled={busy}
                 />
                 <button
                   className="primary-button"
-                  disabled={busy}
+                  disabled={busy || !draft.trim()}
                   onClick={() => void handleSendMessage()}
                 >
-                  {busy ? (agentPhase ?? "Working...") : "Send"}
+                  {busy ? <span className="button-spinner" aria-label="Working" /> : "Send"}
                 </button>
               </div>
             </div>
