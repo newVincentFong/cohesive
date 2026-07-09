@@ -54,13 +54,15 @@ export async function runExploreAgent(input: {
   onProgress: (update: AgentProgress) => Promise<void>;
   onTrace?: AgentTraceCallbacks;
   onAnswerDelta?: (content: string) => void | Promise<void>;
-}): Promise<string> {
+  llm?: AgentContext["llm"];
+}): Promise<{ content: string; messages: LlmMessage[] }> {
   const ctx: AgentContext = {
     session: input.session,
     project: input.project,
     runId: input.runId,
     runMode: input.runMode,
     onProgress: input.onProgress,
+    llm: input.llm,
   };
 
   const mainTools = getToolsForRole("explore-main", input.runMode, {
@@ -93,7 +95,7 @@ export async function runExploreAgent(input: {
     });
 
     input.onTrace?.onColumnEnd(MAIN_COLUMN_ID, "done");
-    return result.content;
+    return { content: result.content, messages: result.messages };
   } catch (err) {
     input.onTrace?.onColumnEnd(MAIN_COLUMN_ID, "error");
     throw err;

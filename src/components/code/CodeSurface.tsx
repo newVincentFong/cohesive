@@ -427,9 +427,10 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
 
       let answer: string;
       try {
-        answer = isBuildMode
+        const agentResult = isBuildMode
           ? await runBuildAgent(agentInput)
           : await runExploreAgent(agentInput);
+        answer = agentResult.content;
       } finally {
         await tracePersister.finish();
         await refreshTraceRuns(session.id);

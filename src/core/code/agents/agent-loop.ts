@@ -95,7 +95,7 @@ async function updateLoopMessage(
 }
 
 export async function runAgentLoop(config: AgentLoopConfig): Promise<AgentLoopResult> {
-  const llm = createLlmProvider();
+  const llm = config.ctx.llm ?? createLlmProvider();
   const messages: LlmMessage[] = [
     { role: "system", content: config.systemPrompt },
     ...config.messages,

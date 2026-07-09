@@ -1,3 +1,4 @@
+import type { LlmProvider } from "@/core/llm/llm.types";
 import type { Session, CodeMode } from "@/core/session/session.types";
 import type { CodeProject } from "@/core/code/agent.types";
 
@@ -30,6 +31,8 @@ export interface AgentContext {
   runId: string;
   runMode: CodeMode;
   onProgress?: (update: AgentProgress) => Promise<void>;
+  /** Optional override for eval harnesses and tests. */
+  llm?: LlmProvider;
 }
 
 export interface JsonSchema extends Record<string, unknown> {
