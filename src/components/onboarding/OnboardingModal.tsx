@@ -50,8 +50,8 @@ export function OnboardingModal({ onCompleted }: OnboardingModalProps) {
         <div>
           <h2 id={titleId}>Welcome to Cohesive</h2>
           <p className="muted">
-            Local-first workspace for Code, Writing, and Mind. Add your DeepSeek
-            API key to enable AI features.
+            Local-first coding agent for exploring and editing your projects.
+            Add your DeepSeek API key to enable AI features.
           </p>
         </div>
         <ApiKeyField

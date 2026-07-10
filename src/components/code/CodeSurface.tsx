@@ -48,6 +48,11 @@ import {
   messageRoleLabel,
 } from "@/components/chat/message-labels";
 import { useChatAutoScroll } from "@/components/chat/useChatAutoScroll";
+import {
+  DEFAULT_CODE_MODE,
+  ENABLED_CODE_MODES,
+  resolveCodeMode,
+} from "@/core/product-flags";
 
 const TRACE_RETENTION_RUNS = 200;
 
@@ -144,7 +149,7 @@ export function CodeSidebar({ activeSessionId, onSelectSession }: CodeSurfacePro
     if (!selectedProjectId) return;
     const session = await createSession({
       domain: "code",
-      defaultMode: "plan",
+      defaultMode: DEFAULT_CODE_MODE,
       projectId: selectedProjectId,
       title: "New code session",
     });
@@ -191,7 +196,9 @@ export function CodeSidebar({ activeSessionId, onSelectSession }: CodeSurfacePro
           activeSessionId={activeSessionId}
           onSelectSession={onSelectSession}
           onSessionsChange={() => void refresh()}
-          renderSubtitle={(session) => formatCodeModeLabel(session.defaultMode ?? "plan")}
+          renderSubtitle={(session) =>
+            formatCodeModeLabel(resolveCodeMode(session.defaultMode))
+          }
         />
       </div>
     </>
@@ -248,7 +255,7 @@ function createTraceCallbacks(
 export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | null }) {
   const [session, setSession] = useState<Session | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [composerMode, setComposerMode] = useState<CodeMode>("plan");
+  const [composerMode, setComposerMode] = useState<CodeMode>(DEFAULT_CODE_MODE);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [agentPhase, setAgentPhase] = useState<string | null>(null);
@@ -286,7 +293,7 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
       setTraceColumns([]);
       setTraceRuns([]);
       setSelectedTraceRunId(null);
-      setComposerMode("plan");
+      setComposerMode(DEFAULT_CODE_MODE);
       return;
     }
 
@@ -297,7 +304,7 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
       setTraceColumns([]);
       setSelectedTraceRunId(null);
       if (nextSession) {
-        setComposerMode(nextSession.defaultMode ?? "plan");
+        setComposerMode(resolveCodeMode(nextSession.defaultMode));
         await touchSession(nextSession.id);
         await refreshSessionData(nextSession);
         const runs = await refreshTraceRuns(nextSession.id);
@@ -538,9 +545,10 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
               ) : null}
               <div className="chat-composer-toolbar">
                 <div className="mode-switch">
-                  {(["plan", "explore", "build"] as CodeMode[]).map((mode) => (
+                  {ENABLED_CODE_MODES.map((mode) => (
                     <button
                       key={mode}
+                      type="button"
                       className={composerMode === mode ? "active" : undefined}
                       title={codeModeHints[mode]}
                       onClick={() => void handleModeChange(mode)}
@@ -561,9 +569,7 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
                   placeholder={
                     composerMode === "build"
                       ? "Ask the coding agent to implement or fix something... (Enter to send)"
-                      : composerMode === "explore"
-                        ? "Ask the coding agent to explore this codebase... (Enter to send)"
-                        : "Switch to explore or build mode for agent chat (Enter to send)"
+                      : "Ask the coding agent to explore this codebase... (Enter to send)"
                   }
                   disabled={busy}
                 />

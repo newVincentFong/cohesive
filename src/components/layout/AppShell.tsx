@@ -5,6 +5,7 @@ import type { Domain } from "@/core/session/session.types";
 import { isMacFrameless } from "@/core/platform/tauri";
 import { DomainSwitch } from "./DomainSwitch";
 import { BrandMark } from "./BrandMark";
+import { ThemeToggle } from "./ThemeToggle";
 import { TrustBadge } from "./TrustBadge";
 
 interface AppShellProps {
@@ -61,6 +62,7 @@ export function AppShell({
           </div>
         </div>
         <div className="topbar-trailing">
+          <ThemeToggle />
           <button
             type="button"
             className="ghost-button"
@@ -74,9 +76,7 @@ export function AppShell({
       </header>
       <div className="workspace">
         <aside className="sidebar">
-          <div className="sidebar-domain-switch">
-            <DomainSwitch activeDomain={activeDomain} onChange={onDomainChange} />
-          </div>
+          <DomainSwitch activeDomain={activeDomain} onChange={onDomainChange} />
           {sidebar}
         </aside>
         <main className="main-panel">{children}</main>

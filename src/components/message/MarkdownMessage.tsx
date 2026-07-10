@@ -1,5 +1,9 @@
 import { Streamdown } from "streamdown";
-import { code } from "@streamdown/code";
+import { createCodePlugin } from "@streamdown/code";
+
+const codePlugin = createCodePlugin({
+  themes: ["github-light", "github-dark"],
+});
 
 interface MarkdownMessageProps {
   content: string;
@@ -18,7 +22,8 @@ export function MarkdownMessage({
     <div className={className ? `markdown-message ${className}` : "markdown-message"}>
       <Streamdown
         mode={mode ?? (isAnimating ? undefined : "static")}
-        plugins={{ code }}
+        plugins={{ code: codePlugin }}
+        shikiTheme={["github-light", "github-dark"]}
         animated={isAnimating}
         isAnimating={isAnimating}
       >

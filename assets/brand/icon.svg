@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" fill="none" role="img" aria-label="Cohesive">
+  <defs>
+    <linearGradient id="cohesive-mark-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2563eb"/>
+      <stop offset="100%" stop-color="#1d4ed8"/>
+    </linearGradient>
+  </defs>
+  <rect
+    x="81"
+    y="81"
+    width="862"
+    height="862"
+    rx="225"
+    ry="225"
+    fill="url(#cohesive-mark-bg)"
+  />
+  <path d="M 713.842 667.488 A 241.36 241.36 0 1 1 713.842 356.512 L 631.431 425.926 A 133.61 133.61 0 1 0 631.431 598.074 Z" fill="#ffffff"/>
+</svg>

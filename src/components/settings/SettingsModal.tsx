@@ -4,6 +4,8 @@ import {
   getAppSettings,
   saveApiKey,
 } from "@/core/settings/settings.service";
+import { useTheme } from "@/core/theme/ThemeProvider";
+import type { ThemeMode } from "@/core/theme/theme";
 import { ApiKeyField } from "./ApiKeyField";
 
 interface SettingsModalProps {
@@ -14,6 +16,7 @@ interface SettingsModalProps {
 export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const titleId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
+  const { theme, setTheme } = useTheme();
   const [hasApiKey, setHasApiKey] = useState(false);
   const [apiKey, setApiKey] = useState("");
   const [saving, setSaving] = useState(false);
@@ -104,6 +107,28 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
 
         <section className="settings-section">
           <div className="settings-section-header">
+            <strong>Appearance</strong>
+          </div>
+          <p className="muted settings-helper">
+            Default is light mode. Your choice is saved on this device.
+          </p>
+          <div className="mode-switch" role="group" aria-label="Theme">
+            {(["light", "dark"] as ThemeMode[]).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                className={theme === mode ? "active" : undefined}
+                onClick={() => setTheme(mode)}
+              >
+                {mode === "light" ? "Light" : "Dark"}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="settings-section">
+          <div className="settings-section-header">
+            <strong>API key</strong>
             <span
               className={`settings-status${hasApiKey ? " settings-status--configured" : ""}`}
             >
