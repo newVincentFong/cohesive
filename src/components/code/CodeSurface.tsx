@@ -174,7 +174,7 @@ export function CodeSidebar({ activeSessionId, onSelectSession }: CodeSurfacePro
       <div className="sidebar-list">
         {projects.length > 0 ? (
           <div className="sidebar-section">
-            <div className="muted sidebar-section-label">
+            <div className="sidebar-section-label">
               Projects
             </div>
             {projects.map((project) => (
@@ -191,15 +191,20 @@ export function CodeSidebar({ activeSessionId, onSelectSession }: CodeSurfacePro
             ))}
           </div>
         ) : null}
-        <SessionSidebarList
-          sessions={sessions}
-          activeSessionId={activeSessionId}
-          onSelectSession={onSelectSession}
-          onSessionsChange={() => void refresh()}
-          renderSubtitle={(session) =>
-            formatCodeModeLabel(resolveCodeMode(session.defaultMode))
-          }
-        />
+        {sessions.length > 0 ? (
+          <div className="sidebar-section">
+            <div className="sidebar-section-label">Sessions</div>
+            <SessionSidebarList
+              sessions={sessions}
+              activeSessionId={activeSessionId}
+              onSelectSession={onSelectSession}
+              onSessionsChange={() => void refresh()}
+              renderSubtitle={(session) =>
+                formatCodeModeLabel(resolveCodeMode(session.defaultMode))
+              }
+            />
+          </div>
+        ) : null}
       </div>
     </>
   );
