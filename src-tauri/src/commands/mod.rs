@@ -246,8 +246,9 @@ pub fn session_update(
 pub fn session_touch(state: tauri::State<'_, AppState>, id: String) -> Result<Session, String> {
     let now = now_iso();
     with_db(&state, |db| {
+        // Only record last open; keep updated_at for content/metadata changes.
         db.execute(
-            "UPDATE sessions SET last_opened_at = ?1, updated_at = ?1 WHERE id = ?2",
+            "UPDATE sessions SET last_opened_at = ?1 WHERE id = ?2",
             params![now, id],
         )
         .map_err(|err| err.to_string())?;

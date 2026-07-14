@@ -53,6 +53,10 @@ import {
   ENABLED_CODE_MODES,
   resolveCodeMode,
 } from "@/core/product-flags";
+import {
+  formatFullDateTime,
+  formatRelativeTime,
+} from "@/core/utils/relative-time";
 
 const TRACE_RETENTION_RUNS = 200;
 
@@ -183,10 +187,8 @@ export function CodeSidebar({ activeSessionId, onSelectSession }: CodeSurfacePro
                 className={`sidebar-item ${selectedProjectId === project.id ? "active" : ""}`}
                 onClick={() => setSelectedProjectId(project.id)}
               >
-                <div>{project.displayName}</div>
-                <div className="muted" style={{ fontSize: 12 }}>
-                  {project.path}
-                </div>
+                <div className="sidebar-item-title">{project.displayName}</div>
+                <div className="sidebar-item-subtitle">{project.path}</div>
               </button>
             ))}
           </div>
@@ -199,9 +201,11 @@ export function CodeSidebar({ activeSessionId, onSelectSession }: CodeSurfacePro
               activeSessionId={activeSessionId}
               onSelectSession={onSelectSession}
               onSessionsChange={() => void refresh()}
-              renderSubtitle={(session) =>
-                formatCodeModeLabel(resolveCodeMode(session.defaultMode))
-              }
+              renderSubtitle={(session) => (
+                <span title={formatFullDateTime(session.updatedAt)}>
+                  {formatRelativeTime(session.updatedAt)}
+                </span>
+              )}
             />
           </div>
         ) : null}

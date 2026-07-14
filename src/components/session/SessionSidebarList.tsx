@@ -19,7 +19,16 @@ export function SessionSidebarList({
   renderSubtitle,
 }: SessionSidebarListProps) {
   const [openMenuSessionId, setOpenMenuSessionId] = useState<string | null>(null);
+  const [, setRelativeTimeTick] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!renderSubtitle) return;
+    const timer = window.setInterval(() => {
+      setRelativeTimeTick((tick) => tick + 1);
+    }, 60_000);
+    return () => window.clearInterval(timer);
+  }, [renderSubtitle]);
 
   useEffect(() => {
     if (!openMenuSessionId) return;
@@ -70,11 +79,9 @@ export function SessionSidebarList({
               className="sidebar-item"
               onClick={() => onSelectSession(session.id)}
             >
-              <div>{session.title}</div>
+              <div className="sidebar-item-title">{session.title}</div>
               {renderSubtitle ? (
-                <div className="muted" style={{ fontSize: 12 }}>
-                  {renderSubtitle(session)}
-                </div>
+                <div className="sidebar-item-subtitle">{renderSubtitle(session)}</div>
               ) : null}
             </button>
             <div className="sidebar-item-actions">
