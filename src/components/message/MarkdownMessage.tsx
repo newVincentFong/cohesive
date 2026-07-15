@@ -26,6 +26,13 @@ export function MarkdownMessage({
         shikiTheme={["github-light", "github-dark"]}
         animated={isAnimating}
         isAnimating={isAnimating}
+        className="space-y-2"
+        lineNumbers={false}
+        controls={{
+          code: { copy: true, download: false },
+          table: { copy: true, download: false, fullscreen: false },
+          mermaid: { copy: true, download: false, fullscreen: false },
+        }}
       >
         {content}
       </Streamdown>
