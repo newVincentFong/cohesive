@@ -141,7 +141,7 @@ export function AgentTracePanel({
 
   if (columns.length === 0) {
     return (
-      <div className="agent-trace-panel">
+      <div className="agent-trace-panel" data-demo="trace-panel">
         {header}
         <div className="muted agent-trace-empty">
           Send a message in explore mode to start tracing.
@@ -151,7 +151,7 @@ export function AgentTracePanel({
   }
 
   return (
-    <div className="agent-trace-panel">
+    <div className="agent-trace-panel" data-demo="trace-panel">
       {header}
       {view === "messages" ? (
         <div className="agent-trace-columns">

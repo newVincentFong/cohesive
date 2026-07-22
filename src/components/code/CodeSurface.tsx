@@ -57,6 +57,8 @@ import {
   formatFullDateTime,
   formatRelativeTime,
 } from "@/core/utils/relative-time";
+import { DEMO_REFRESH_EVENT } from "@/demo/types";
+import { isDemoMode } from "@/demo/isDemoMode";
 
 const TRACE_RETENTION_RUNS = 200;
 
@@ -133,13 +135,27 @@ export function CodeSidebar({ activeSessionId, onSelectSession }: CodeSurfacePro
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
   async function refresh() {
-    setSessions(await listSessions("code"));
-    setProjects(await listCodeProjects());
+    const nextSessions = await listSessions("code");
+    const nextProjects = await listCodeProjects();
+    setSessions(nextSessions);
+    setProjects(nextProjects);
+    return { nextSessions, nextProjects };
   }
 
   useEffect(() => {
     void refresh();
   }, []);
+
+  useEffect(() => {
+    if (!activeSessionId) return;
+    void (async () => {
+      const { nextSessions, nextProjects } = await refresh();
+      const session = nextSessions.find((item) => item.id === activeSessionId);
+      if (session?.projectId && nextProjects.some((project) => project.id === session.projectId)) {
+        setSelectedProjectId(session.projectId);
+      }
+    })();
+  }, [activeSessionId]);
 
   async function handlePickProject() {
     const selected = await open({ directory: true, multiple: false });
@@ -164,11 +180,16 @@ export function CodeSidebar({ activeSessionId, onSelectSession }: CodeSurfacePro
   return (
     <>
       <div className="sidebar-header">
-        <button className="secondary-button" onClick={() => void handlePickProject()}>
+        <button
+          className="secondary-button"
+          data-demo="pick-project"
+          onClick={() => void handlePickProject()}
+        >
           Pick project
         </button>
         <button
           className="primary-button"
+          data-demo="new-session"
           disabled={!selectedProjectId}
           onClick={() => void handleNewSession()}
         >
@@ -284,7 +305,9 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
   }
 
   async function refreshTraceRuns(sessionId: string): Promise<AgentRun[]> {
-    const runs = (await listAgentRuns(sessionId)).filter((run) => run.mode === "explore");
+    const runs = (await listAgentRuns(sessionId)).filter(
+      (run) => run.mode === "explore" || run.mode === "build",
+    );
     setTraceRuns(runs);
     return runs;
   }
@@ -306,12 +329,14 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
       return;
     }
 
-    void (async () => {
+    async function loadActiveSession(options: { resetTraceSelection: boolean }) {
       const sessions = await listSessions("code");
       const nextSession = sessions.find((item) => item.id === activeSessionId) ?? null;
       setSession(nextSession);
-      setTraceColumns([]);
-      setSelectedTraceRunId(null);
+      if (options.resetTraceSelection) {
+        setTraceColumns([]);
+        setSelectedTraceRunId(null);
+      }
       if (nextSession) {
         setComposerMode(resolveCodeMode(nextSession.defaultMode));
         await touchSession(nextSession.id);
@@ -320,11 +345,23 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
         const latest = runs[runs.length - 1];
         if (latest) {
           await loadPersistedTrace(latest.id);
+        } else if (options.resetTraceSelection) {
+          setTraceColumns([]);
         }
       } else {
         setTraceRuns([]);
       }
-    })();
+    }
+
+    void loadActiveSession({ resetTraceSelection: true });
+
+    if (!isDemoMode()) return;
+
+    function onDemoRefresh() {
+      void loadActiveSession({ resetTraceSelection: false });
+    }
+    window.addEventListener(DEMO_REFRESH_EVENT, onDemoRefresh);
+    return () => window.removeEventListener(DEMO_REFRESH_EVENT, onDemoRefresh);
   }, [activeSessionId]);
 
   async function handleModeChange(mode: CodeMode) {
@@ -502,6 +539,7 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
             <button
               type="button"
               className="secondary-button trace-toggle-button"
+              data-demo="trace-toggle"
               onClick={() => setTraceExpanded(!traceExpanded)}
             >
               {busy ? <span className="trace-running-dot" aria-hidden="true" /> : null}
@@ -560,6 +598,7 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
                       type="button"
                       className={composerMode === mode ? "active" : undefined}
                       title={codeModeHints[mode]}
+                      data-demo={mode === "build" ? "mode-build" : "mode-explore"}
                       onClick={() => void handleModeChange(mode)}
                     >
                       {formatCodeModeLabel(mode)}
@@ -570,6 +609,7 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
               <div className="chat-composer-row">
                 <textarea
                   className="textarea-input"
+                  data-demo="composer"
                   value={draft}
                   onChange={(event) => setDraft(event.target.value)}
                   onKeyDown={(event) =>
@@ -584,6 +624,7 @@ export function CodeMainPanel({ activeSessionId }: { activeSessionId: string | n
                 />
                 <button
                   className="primary-button"
+                  data-demo="send"
                   disabled={busy || !draft.trim()}
                   onClick={() => void handleSendMessage()}
                 >

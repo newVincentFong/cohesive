@@ -1320,3 +1320,77 @@ pub fn code_project_register(
         })
     })
 }
+
+fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> Result<(), String> {
+    std::fs::create_dir_all(dst).map_err(|err| err.to_string())?;
+    for entry in std::fs::read_dir(src).map_err(|err| err.to_string())? {
+        let entry = entry.map_err(|err| err.to_string())?;
+        let file_type = entry.file_type().map_err(|err| err.to_string())?;
+        let target = dst.join(entry.file_name());
+        if file_type.is_dir() {
+            copy_dir_recursive(&entry.path(), &target)?;
+        } else if file_type.is_file() {
+            std::fs::copy(entry.path(), &target).map_err(|err| err.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+fn resolve_todo_fixture_src() -> Result<std::path::PathBuf, String> {
+    if let Ok(override_path) = std::env::var("COHESIVE_DEMO_FIXTURE") {
+        let path = std::path::PathBuf::from(override_path);
+        if path.is_dir() {
+            return Ok(path);
+        }
+        return Err(format!(
+            "COHESIVE_DEMO_FIXTURE is not a directory: {}",
+            path.display()
+        ));
+    }
+
+    let candidates = [
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../evals/fixtures/todo-app"),
+        std::env::current_dir()
+            .map_err(|err| err.to_string())?
+            .join("evals/fixtures/todo-app"),
+        std::env::current_dir()
+            .map_err(|err| err.to_string())?
+            .join("../evals/fixtures/todo-app"),
+    ];
+
+    for candidate in candidates {
+        if candidate.is_dir() {
+            return Ok(candidate);
+        }
+    }
+
+    Err(
+        "Could not find evals/fixtures/todo-app. Set COHESIVE_DEMO_FIXTURE to an absolute path."
+            .to_string(),
+    )
+}
+
+/// Copies the todo-app eval fixture into a temp folder, registers it as a
+/// code project, and marks onboarding complete. Recording / demo only.
+#[tauri::command]
+pub fn demo_prepare_fixture(
+    state: tauri::State<'_, AppState>,
+) -> Result<CodeProject, String> {
+    let src = resolve_todo_fixture_src()?;
+    let run_id = Uuid::new_v4().to_string();
+    let dest_root = std::env::temp_dir().join(format!("cohesive-demo-{run_id}"));
+    let dest = dest_root.join("todo-app");
+    copy_dir_recursive(&src, &dest)?;
+
+    with_db(&state, |db| {
+        db.execute(
+            "INSERT INTO app_settings (key, value) VALUES ('onboarding_completed', 'true')
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            [],
+        )
+        .map_err(|err| err.to_string())?;
+        Ok(())
+    })?;
+
+    code_project_register(state, dest.to_string_lossy().to_string())
+}

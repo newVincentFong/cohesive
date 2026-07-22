@@ -54,6 +54,7 @@ pub fn run() {
             commands::writing_document_save,
             commands::code_project_list,
             commands::code_project_register,
+            commands::demo_prepare_fixture,
             commands::shell_run,
             commands::project_read_file,
             commands::project_write_file,

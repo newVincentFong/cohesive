@@ -1,0 +1,171 @@
+{
+  "title": "Inspect explore trace",
+  "mode": "explore",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Where is the default todo filter defined, and who imports it?"
+    },
+    {
+      "role": "tool",
+      "toolName": "glob",
+      "content": "Found src/filters/default-filter.ts"
+    },
+    {
+      "role": "tool",
+      "toolName": "read_file",
+      "content": "defaultFilter() → LEGACY_STATUS_LABEL"
+    },
+    {
+      "role": "tool",
+      "toolName": "search",
+      "content": "Imported by todo-service.ts and status-badge.ts"
+    },
+    {
+      "role": "assistant",
+      "content": "Defined in `src/filters/default-filter.ts`, imported by the todo service and status badge UI."
+    }
+  ],
+  "trace": {
+    "columns": [
+      {
+        "id": "main",
+        "kind": "main",
+        "label": "explore",
+        "status": "done",
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "glob",
+              "description": "Find files by glob pattern",
+              "parameters": { "type": "object" }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "read_file",
+              "description": "Read a project file",
+              "parameters": { "type": "object" }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "search",
+              "description": "Search the codebase",
+              "parameters": { "type": "object" }
+            }
+          }
+        ],
+        "startedOffsetMs": 0,
+        "endedOffsetMs": 4800
+      }
+    ],
+    "messages": [
+      {
+        "id": "tr-user",
+        "columnId": "main",
+        "iteration": 0,
+        "index": 0,
+        "role": "user",
+        "content": "Where is the default todo filter defined, and who imports it?",
+        "offsetMs": 0
+      },
+      {
+        "id": "tr-asst-1",
+        "columnId": "main",
+        "iteration": 1,
+        "index": 1,
+        "role": "assistant",
+        "toolCalls": [
+          {
+            "id": "call_glob",
+            "type": "function",
+            "function": {
+              "name": "glob",
+              "arguments": "{\"pattern\":\"**/filters/**\"}"
+            }
+          }
+        ],
+        "offsetMs": 350
+      },
+      {
+        "id": "tr-tool-glob",
+        "columnId": "main",
+        "iteration": 1,
+        "index": 2,
+        "role": "tool",
+        "toolCallId": "call_glob",
+        "content": "src/filters/default-filter.ts",
+        "offsetMs": 700
+      },
+      {
+        "id": "tr-asst-2",
+        "columnId": "main",
+        "iteration": 2,
+        "index": 3,
+        "role": "assistant",
+        "toolCalls": [
+          {
+            "id": "call_read",
+            "type": "function",
+            "function": {
+              "name": "read_file",
+              "arguments": "{\"path\":\"src/filters/default-filter.ts\"}"
+            }
+          }
+        ],
+        "offsetMs": 1100
+      },
+      {
+        "id": "tr-tool-read",
+        "columnId": "main",
+        "iteration": 2,
+        "index": 4,
+        "role": "tool",
+        "toolCallId": "call_read",
+        "content": "export function defaultFilter()...",
+        "offsetMs": 1600
+      },
+      {
+        "id": "tr-asst-3",
+        "columnId": "main",
+        "iteration": 3,
+        "index": 5,
+        "role": "assistant",
+        "toolCalls": [
+          {
+            "id": "call_search",
+            "type": "function",
+            "function": {
+              "name": "search",
+              "arguments": "{\"query\":\"defaultFilter\"}"
+            }
+          }
+        ],
+        "offsetMs": 2100
+      },
+      {
+        "id": "tr-tool-search",
+        "columnId": "main",
+        "iteration": 3,
+        "index": 6,
+        "role": "tool",
+        "toolCallId": "call_search",
+        "content": "todo-service.ts · status-badge.ts",
+        "offsetMs": 2600
+      },
+      {
+        "id": "tr-asst-final",
+        "columnId": "main",
+        "iteration": 4,
+        "index": 7,
+        "role": "assistant",
+        "content": "Filter is in default-filter.ts; two importers found.",
+        "offsetMs": 3400
+      }
+    ]
+  }
+}
