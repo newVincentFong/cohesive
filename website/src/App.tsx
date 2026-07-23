@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { SITE } from "./config";
 
 const features = [
@@ -32,6 +33,113 @@ const steps = [
     body: "Open the agent timeline to see reads, searches, writes, and command results.",
   },
 ] as const;
+
+const XATTR_COMMAND = "xattr -cr /Applications/Cohesive.app";
+
+function FirstLaunchGuide() {
+  const [copied, setCopied] = useState(false);
+
+  async function copyCommand() {
+    try {
+      await navigator.clipboard.writeText(XATTR_COMMAND);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  return (
+    <aside id="first-launch" className="first-launch">
+      <div className="first-launch-head">
+        <span className="first-launch-badge">Heads up · First launch</span>
+        <p>
+          {SITE.productName} is open source and not yet notarized by Apple, so
+          macOS will show a warning the first time you open it. This is expected
+          — here&apos;s how to get past it.
+        </p>
+      </div>
+
+      <div className="macos-dialog" aria-hidden="true">
+        <div className="macos-dialog-icon">!</div>
+        <div className="macos-dialog-body">
+          <strong>
+            &ldquo;{SITE.productName}&rdquo; can&apos;t be opened because Apple
+            cannot check it for malicious software.
+          </strong>
+          <p>
+            This file was downloaded on an unknown date. macOS cannot verify that
+            this app is free from malware.
+          </p>
+          <div className="macos-dialog-actions">
+            <span>Done</span>
+            <span>Move to Trash</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="guide-columns">
+        <article>
+          <h3>macOS 15 Sequoia and later</h3>
+          <ol>
+            <li>
+              Double-click {SITE.productName}, then click <strong>Done</strong> to
+              dismiss the warning.
+            </li>
+            <li>
+              Open <strong>System Settings → Privacy &amp; Security</strong> and
+              scroll to the bottom.
+            </li>
+            <li>
+              Click <strong>Open Anyway</strong>, then confirm once more when
+              prompted.
+            </li>
+          </ol>
+        </article>
+        <article>
+          <h3>macOS 14 Sonoma and earlier</h3>
+          <ol>
+            <li>
+              In <strong>Applications</strong>, Control-click (right-click){" "}
+              {SITE.productName}.
+            </li>
+            <li>
+              Choose <strong>Open</strong> from the menu.
+            </li>
+            <li>
+              In the dialog that appears, click <strong>Open</strong> again.
+            </li>
+          </ol>
+        </article>
+      </div>
+
+      <details className="first-launch-advanced">
+        <summary>
+          Still blocked? If you see &ldquo;damaged and can&apos;t be opened&rdquo;
+        </summary>
+        <p>
+          macOS sometimes quarantines unsigned downloads. Clear the quarantine
+          flag in Terminal, then open the app again:
+        </p>
+        <div className="command-row">
+          <code>{XATTR_COMMAND}</code>
+          <button type="button" className="btn-copy" onClick={copyCommand}>
+            {copied ? "Copied ✓" : "Copy"}
+          </button>
+        </div>
+      </details>
+
+      <p className="first-launch-footnote">
+        Why the warning? We haven&apos;t paid for an Apple Developer certificate
+        yet. The full source is on{" "}
+        <a href={SITE.githubUrl} target="_blank" rel="noreferrer">
+          GitHub
+        </a>{" "}
+        — you can audit or build it yourself.
+      </p>
+    </aside>
+  );
+}
 
 export function App() {
   return (
@@ -163,8 +271,9 @@ export function App() {
           <div className="section-head">
             <h2>Download</h2>
             <p>
-              macOS builds ship via GitHub Releases. Point these links at the
-              latest <code>.dmg</code> assets after your first tagged release.
+              Grab a macOS <code>.dmg</code> from GitHub Releases, then follow
+              the first-launch steps below — the build is unsigned until we ship
+              with Apple notarization.
             </p>
           </div>
           <div className="download-grid">
@@ -177,6 +286,7 @@ export function App() {
               <span>x64 · Intel Macs</span>
             </a>
           </div>
+          <FirstLaunchGuide />
           <p className="meta center">
             Windows builds are not published yet. Prefer building from source on
             GitHub if you need another platform.

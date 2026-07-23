@@ -422,6 +422,248 @@ main,
   box-shadow: 0 16px 36px rgba(37, 99, 235, 0.12);
 }
 
+.download-grid {
+  margin-bottom: 20px;
+}
+
+.first-launch {
+  margin: 0 0 20px;
+  padding: 24px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(180, 140, 60, 0.28);
+  background:
+    linear-gradient(180deg, rgba(255, 248, 230, 0.92), rgba(255, 252, 244, 0.88));
+  box-shadow: 0 12px 32px rgba(120, 90, 20, 0.06);
+}
+
+.first-launch-head {
+  margin-bottom: 18px;
+}
+
+.first-launch-badge {
+  display: inline-flex;
+  margin-bottom: 10px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(180, 120, 20, 0.12);
+  color: #8a5a00;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.first-launch-head p {
+  margin: 0;
+  max-width: 62ch;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.macos-dialog {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  gap: 14px;
+  align-items: start;
+  max-width: 420px;
+  margin: 0 auto 22px;
+  padding: 18px 16px 14px;
+  border-radius: 14px;
+  border: 1px solid #d8dde6;
+  background: #f6f7f9;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 18px 40px rgba(15, 23, 42, 0.12);
+  font-family:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+}
+
+.macos-dialog-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #ffd56a, #f0a000);
+  color: #5c3b00;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 2px 6px rgba(180, 120, 0, 0.28);
+}
+
+.macos-dialog-body strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+}
+
+.macos-dialog-body p {
+  margin: 8px 0 0;
+  color: #5b6573;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.macos-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.macos-dialog-actions span {
+  min-width: 84px;
+  padding: 5px 12px;
+  border-radius: 6px;
+  border: 1px solid #c9ced6;
+  background: linear-gradient(180deg, #ffffff, #f0f2f5);
+  color: #1f2937;
+  font-size: 12px;
+  font-weight: 500;
+  text-align: center;
+}
+
+.guide-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.guide-columns article {
+  padding: 16px 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(215, 224, 234, 0.95);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.guide-columns h3 {
+  margin: 0 0 10px;
+  font-family: Sora, "IBM Plex Sans", sans-serif;
+  font-size: 15px;
+  letter-spacing: -0.02em;
+}
+
+.guide-columns ol {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.guide-columns li + li {
+  margin-top: 8px;
+}
+
+.guide-columns strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.first-launch-advanced {
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(215, 224, 234, 0.95);
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.first-launch-advanced summary {
+  cursor: pointer;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  list-style: none;
+}
+
+.first-launch-advanced summary::-webkit-details-marker {
+  display: none;
+}
+
+.first-launch-advanced summary::before {
+  content: "▸";
+  display: inline-block;
+  margin-right: 8px;
+  color: #8a5a00;
+  transition: transform 140ms ease;
+}
+
+.first-launch-advanced[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.first-launch-advanced p {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.command-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.command-row code {
+  flex: 1 1 220px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: #0f172a;
+  color: #e2e8f0;
+  font-size: 12px;
+  overflow-x: auto;
+}
+
+.btn-copy {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid rgba(180, 120, 20, 0.35);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #8a5a00;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease;
+}
+
+.btn-copy:hover {
+  background: rgba(255, 248, 230, 1);
+  border-color: rgba(180, 120, 20, 0.55);
+}
+
+.first-launch-footnote {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.first-launch-footnote a,
+.meta a {
+  color: var(--accent-deep);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.first-launch-footnote a:hover,
+.meta a:hover {
+  color: var(--ink);
+}
+
 .tech-row {
   display: flex;
   flex-wrap: wrap;
@@ -466,8 +708,13 @@ main,
   .feature-grid,
   .demo-strip,
   .steps,
-  .download-grid {
+  .download-grid,
+  .guide-columns {
     grid-template-columns: 1fr;
+  }
+
+  .macos-dialog {
+    max-width: none;
   }
 
   .hero {
