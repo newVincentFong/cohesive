@@ -174,14 +174,11 @@ export function CodeSidebar({ activeSessionId, onSelectSession }: CodeSurfacePro
 
   useEffect(() => {
     if (!activeSessionId) return;
-    void (async () => {
-      const { nextSessions, nextProjects } = await refresh();
-      const session = nextSessions.find((item) => item.id === activeSessionId);
-      if (session?.projectId && nextProjects.some((project) => project.id === session.projectId)) {
-        setSelectedProjectId(session.projectId);
-      }
-    })();
-  }, [activeSessionId]);
+    const session = sessions.find((item) => item.id === activeSessionId);
+    if (session?.projectId && projects.some((project) => project.id === session.projectId)) {
+      setSelectedProjectId(session.projectId);
+    }
+  }, [activeSessionId, sessions, projects]);
 
   async function handleSelectProject(project: CodeProject) {
     const updated = await registerCodeProject(project.path);
