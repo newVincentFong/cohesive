@@ -1,7 +1,7 @@
 {
   "name": "cohesive",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -15,6 +15,10 @@
     "icon:generate": "node scripts/generate-app-icon.mjs",
     "icon:export": "npm run icon:generate && tauri icon assets/brand/icon-1024.png",
     "icon:svg": "node scripts/generate-app-icon.mjs --svg-only",
+    "bump": "node scripts/bump-version.mjs",
+    "bump:patch": "node scripts/bump-version.mjs patch",
+    "bump:minor": "node scripts/bump-version.mjs minor",
+    "bump:major": "node scripts/bump-version.mjs major",
     "website:dev": "npm --prefix website run dev",
     "website:build": "npm --prefix website run build",
     "postinstall": "patch-package",
