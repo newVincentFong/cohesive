@@ -82,21 +82,29 @@ pages and marketing (CSS variables do not work inside `<img>`).
 
 ## Releases
 
-Push a version tag to trigger macOS arm64 + x64 builds:
+Bump the Mac app version locally (updates app files and commits; does not tag or push):
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+npm run bump:patch   # or bump:minor / bump:major / npm run bump -- 0.2.0
+```
+
+Then tag and push manually to trigger macOS arm64 + x64 builds:
+
+```bash
+git tag v0.1.1
+git push origin HEAD
+git push origin v0.1.1
 ```
 
 GitHub Actions (`.github/workflows/release.yml`) creates a draft Release with Tauri artifacts.
 
-Keep versions in sync across:
+The bump script keeps these Mac app versions in sync:
 
-- `package.json`
+- `package.json` / `package-lock.json`
 - `src-tauri/tauri.conf.json`
-- `src-tauri/Cargo.toml`
-- `website/src/config.ts`
+- `src-tauri/Cargo.toml` / `src-tauri/Cargo.lock`
+
+Website download URLs in `website/src/config.ts` are updated separately after release assets exist, then deploy the landing page on its own.
 
 ## License
 
