@@ -20,7 +20,7 @@ export function DemoHud({
   onPlay,
   onStop,
 }: DemoHudProps) {
-  if (hideHud) return null;
+  if (hideHud || running) return null;
 
   return (
     <div className="demo-hud" role="region" aria-label="Demo controls">
@@ -45,7 +45,9 @@ export function DemoHud({
         {running ? "Stop" : "Play"}
       </button>
       <div className="demo-hud-status">{status}</div>
-      <div className="demo-hud-hint">Space play/stop · R replay · ?hud=0 hide</div>
+      <div className="demo-hud-hint">
+        Space play/stop · R replay · hides while playing · ?hud=0 always hide
+      </div>
     </div>
   );
 }
