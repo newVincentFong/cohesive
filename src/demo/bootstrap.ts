@@ -11,6 +11,10 @@ export interface DemoBootstrapResult {
   sessionId: string;
 }
 
+/**
+ * Resize window, materialize the isolated demo fixture + project, and open a
+ * starter session. All DB writes land in `cohesive-demo.db` (Rust side).
+ */
 export async function bootstrapDemoMode(): Promise<DemoBootstrapResult> {
   const window = getCurrentWindow();
   await window.setSize(new LogicalSize(DEMO_WINDOW_WIDTH, DEMO_WINDOW_HEIGHT));

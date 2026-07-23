@@ -6,7 +6,7 @@ mod project_ops;
 mod settings;
 mod shell;
 
-use db::init_database;
+use db::{cleanup_demo_fixture_on_exit, init_database, AppState};
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -66,6 +66,13 @@ pub fn run() {
             llm::llm_stream,
             llm::writing_selection_action,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            if let tauri::RunEvent::Exit = event {
+                if let Some(state) = app_handle.try_state::<AppState>() {
+                    cleanup_demo_fixture_on_exit(&state);
+                }
+            }
+        });
 }

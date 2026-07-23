@@ -1370,17 +1370,31 @@ fn resolve_todo_fixture_src() -> Result<std::path::PathBuf, String> {
     )
 }
 
-/// Copies the todo-app eval fixture into a temp folder, registers it as a
+/// Copies the todo-app eval fixture into a stable temp folder, registers it as a
 /// code project, and marks onboarding complete. Recording / demo only.
+///
+/// Uses `{temp}/cohesive-demo/todo-app` (overwritten each call). Demo writes go
+/// to the isolated `cohesive-demo.db` (see `init_database`); the fixture tree is
+/// removed on process exit.
 #[tauri::command]
 pub fn demo_prepare_fixture(
     state: tauri::State<'_, AppState>,
 ) -> Result<CodeProject, String> {
     let src = resolve_todo_fixture_src()?;
-    let run_id = Uuid::new_v4().to_string();
-    let dest_root = std::env::temp_dir().join(format!("cohesive-demo-{run_id}"));
+    let dest_root = crate::db::demo_fixture_root_path();
     let dest = dest_root.join("todo-app");
+    if dest_root.exists() {
+        std::fs::remove_dir_all(&dest_root).map_err(|err| err.to_string())?;
+    }
     copy_dir_recursive(&src, &dest)?;
+
+    {
+        let mut root = state
+            .demo_fixture_root
+            .lock()
+            .map_err(|_| "Demo fixture lock poisoned".to_string())?;
+        *root = Some(dest_root.clone());
+    }
 
     with_db(&state, |db| {
         db.execute(

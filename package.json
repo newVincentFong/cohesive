@@ -8,7 +8,7 @@
     "build": "tsc -p tsconfig.app.json && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "tauri:demo": "VITE_COHESIVE_DEMO=1 tauri dev",
+    "tauri:demo": "COHESIVE_DEMO=1 VITE_COHESIVE_DEMO=1 tauri dev",
     "tauri:build": "tauri build",
     "tauri:build:arm64": "tauri build --target aarch64-apple-darwin",
     "tauri:build:x64": "tauri build --target x86_64-apple-darwin",

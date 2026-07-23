@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use rusqlite::{params, Connection};
@@ -15,6 +15,18 @@ const SCHEMA_VERSION_KEY: &str = "schema_version";
 pub struct AppState {
     pub db: Mutex<Connection>,
     pub data_dir: PathBuf,
+    /// Set by `demo_prepare_fixture`; cleared on process exit cleanup.
+    pub demo_fixture_root: Mutex<Option<PathBuf>>,
+}
+
+/// True when launched via `npm run tauri:demo` (`COHESIVE_DEMO=1`).
+pub fn is_demo_process() -> bool {
+    std::env::var("COHESIVE_DEMO").ok().as_deref() == Some("1")
+}
+
+/// Stable temp root for the demo todo-app fixture (`{temp}/cohesive-demo`).
+pub fn demo_fixture_root_path() -> PathBuf {
+    std::env::temp_dir().join("cohesive-demo")
 }
 
 fn backup_database_path(db_path: &std::path::Path) -> PathBuf {
@@ -58,6 +70,24 @@ fn ensure_schema(connection: &Connection) -> Result<(), String> {
     Ok(())
 }
 
+/// Remove the stable demo fixture dir under the OS temp directory.
+pub fn cleanup_demo_temp_dirs() {
+    let _ = std::fs::remove_dir_all(demo_fixture_root_path());
+}
+
+/// Best-effort: remove the recorded (or stable) demo fixture tree on process exit.
+pub fn cleanup_demo_fixture_on_exit(state: &AppState) {
+    if let Ok(mut guard) = state.demo_fixture_root.lock() {
+        if let Some(root) = guard.take() {
+            let _ = std::fs::remove_dir_all(&root);
+            return;
+        }
+    }
+    if is_demo_process() {
+        cleanup_demo_temp_dirs();
+    }
+}
+
 pub fn init_database(app: &AppHandle) -> Result<AppState, String> {
     let data_dir = app
         .path()
@@ -69,8 +99,21 @@ pub fn init_database(app: &AppHandle) -> Result<AppState, String> {
     std::fs::create_dir_all(data_dir.join("code/workspaces")).map_err(|err| err.to_string())?;
     std::fs::create_dir_all(data_dir.join("mind/exports")).map_err(|err| err.to_string())?;
 
-    let db_path = data_dir.join("cohesive.db");
-    let needs_reset = if db_path.exists() {
+    let demo = is_demo_process();
+    let db_path = if demo {
+        let path = data_dir.join("cohesive-demo.db");
+        // Fresh slate every demo launch so recordings are reproducible.
+        if path.exists() {
+            std::fs::remove_file(&path).map_err(|err| err.to_string())?;
+        }
+        // Also clear any leftover fixture from a previous crashed demo run.
+        cleanup_demo_temp_dirs();
+        path
+    } else {
+        data_dir.join("cohesive.db")
+    };
+
+    let needs_reset = if !demo && db_path.exists() {
         let probe = Connection::open(&db_path).map_err(|err| err.to_string())?;
         match read_schema_version(&probe) {
             Some(version) => {
@@ -87,12 +130,17 @@ pub fn init_database(app: &AppHandle) -> Result<AppState, String> {
         std::fs::rename(&db_path, backup_path).map_err(|err| err.to_string())?;
     }
 
-    let connection = Connection::open(db_path).map_err(|err| err.to_string())?;
+    let connection = Connection::open(&db_path).map_err(|err| err.to_string())?;
+    // PRAGMA foreign_keys is per-connection; schema.sql only runs on schema apply.
+    connection
+        .pragma_update(None, "foreign_keys", true)
+        .map_err(|err| err.to_string())?;
     ensure_schema(&connection)?;
 
     Ok(AppState {
         db: Mutex::new(connection),
         data_dir,
+        demo_fixture_root: Mutex::new(None),
     })
 }
 
@@ -116,11 +164,11 @@ pub fn parse_metadata(raw: Option<String>) -> Option<serde_json::Value> {
     raw.and_then(|value| serde_json::from_str(&value).ok())
 }
 
-pub fn read_text_file(path: &std::path::Path) -> Result<String, String> {
+pub fn read_text_file(path: &Path) -> Result<String, String> {
     std::fs::read_to_string(path).map_err(|err| err.to_string())
 }
 
-pub fn write_text_file(path: &std::path::Path, content: &str) -> Result<(), String> {
+pub fn write_text_file(path: &Path, content: &str) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|err| err.to_string())?;
     }
