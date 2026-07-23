@@ -40,6 +40,7 @@ import { AgentTracePanel } from "@/components/code/AgentTracePanel";
 import { MarkdownMessage } from "@/components/message/MarkdownMessage";
 import { STREAMING_MESSAGE_ID } from "@/core/message/streaming.constants";
 import { SessionSidebarList } from "@/components/session/SessionSidebarList";
+import { ProjectSwitcher } from "@/components/code/ProjectSwitcher";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { handleComposerKeyDown } from "@/components/chat/composer-keydown";
 import {
@@ -142,8 +143,33 @@ export function CodeSidebar({ activeSessionId, onSelectSession }: CodeSurfacePro
     return { nextSessions, nextProjects };
   }
 
+  function selectLatestSessionForProject(
+    projectId: string,
+    nextSessions: Session[],
+  ) {
+    const latest = nextSessions.find((session) => session.projectId === projectId);
+    onSelectSession(latest?.id ?? null);
+  }
+
   useEffect(() => {
-    void refresh();
+    void (async () => {
+      const { nextSessions, nextProjects } = await refresh();
+      if (activeSessionId) {
+        const session = nextSessions.find((item) => item.id === activeSessionId);
+        if (
+          session?.projectId &&
+          nextProjects.some((project) => project.id === session.projectId)
+        ) {
+          setSelectedProjectId(session.projectId);
+          return;
+        }
+      }
+      if (nextProjects[0]) {
+        setSelectedProjectId(nextProjects[0].id);
+      }
+    })();
+    // Intentionally mount-only: activeSessionId sync lives in the effect below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -157,12 +183,20 @@ export function CodeSidebar({ activeSessionId, onSelectSession }: CodeSurfacePro
     })();
   }, [activeSessionId]);
 
+  async function handleSelectProject(project: CodeProject) {
+    const updated = await registerCodeProject(project.path);
+    setSelectedProjectId(updated.id);
+    const { nextSessions } = await refresh();
+    selectLatestSessionForProject(updated.id, nextSessions);
+  }
+
   async function handlePickProject() {
     const selected = await open({ directory: true, multiple: false });
     if (!selected || Array.isArray(selected)) return;
     const project = await registerCodeProject(selected);
     setSelectedProjectId(project.id);
-    await refresh();
+    const { nextSessions } = await refresh();
+    selectLatestSessionForProject(project.id, nextSessions);
   }
 
   async function handleNewSession() {
@@ -177,16 +211,19 @@ export function CodeSidebar({ activeSessionId, onSelectSession }: CodeSurfacePro
     onSelectSession(session.id);
   }
 
+  const projectSessions = selectedProjectId
+    ? sessions.filter((session) => session.projectId === selectedProjectId)
+    : [];
+
   return (
     <>
-      <div className="sidebar-header">
-        <button
-          className="secondary-button"
-          data-demo="pick-project"
-          onClick={() => void handlePickProject()}
-        >
-          Pick project
-        </button>
+      <div className="sidebar-header sidebar-header--stacked">
+        <ProjectSwitcher
+          projects={projects}
+          selectedProjectId={selectedProjectId}
+          onSelectProject={(project) => void handleSelectProject(project)}
+          onPickProject={() => void handlePickProject()}
+        />
         <button
           className="primary-button"
           data-demo="new-session"
@@ -197,28 +234,11 @@ export function CodeSidebar({ activeSessionId, onSelectSession }: CodeSurfacePro
         </button>
       </div>
       <div className="sidebar-list">
-        {projects.length > 0 ? (
-          <div className="sidebar-section">
-            <div className="sidebar-section-label">
-              Projects
-            </div>
-            {projects.map((project) => (
-              <button
-                key={project.id}
-                className={`sidebar-item ${selectedProjectId === project.id ? "active" : ""}`}
-                onClick={() => setSelectedProjectId(project.id)}
-              >
-                <div className="sidebar-item-title">{project.displayName}</div>
-                <div className="sidebar-item-subtitle">{project.path}</div>
-              </button>
-            ))}
-          </div>
-        ) : null}
-        {sessions.length > 0 ? (
+        {projectSessions.length > 0 ? (
           <div className="sidebar-section">
             <div className="sidebar-section-label">Sessions</div>
             <SessionSidebarList
-              sessions={sessions}
+              sessions={projectSessions}
               activeSessionId={activeSessionId}
               onSelectSession={onSelectSession}
               onSessionsChange={() => void refresh()}
